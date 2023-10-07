@@ -9,8 +9,12 @@
 #ifndef ISOBUS_VIRTUAL_TERMINAL_OBJECTS_HPP
 #define ISOBUS_VIRTUAL_TERMINAL_OBJECTS_HPP
 
+#include "isobus/isobus/can_constants.hpp"
+
+#include <array>
 #include <cstdint>
 #include <map>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -82,6 +86,33 @@ namespace isobus
 		Reserved = 255 ///< Reserved for future use. (See Clause D.14 Get Supported Objects message)
 	};
 
+	/// @brief VT 3 component colour vector
+	class VTColourVector
+	{
+	public:
+		float r, g, b;
+		constexpr VTColourVector() :
+		  r(0.0f), g(0.0f), b(0.0f) {}
+		constexpr VTColourVector(float _r, float _g, float _b) :
+		  r(_r), g(_g), b(_b) {}
+	};
+
+	/// @brief An object that represents the VT's active colour table
+	class VTColourTable
+	{
+	public:
+		VTColourTable();
+
+		VTColourVector get_colour(std::uint8_t colorIndex) const;
+
+		void set_colour(std::uint8_t colorIndex, VTColourVector newColour);
+
+	private:
+		static constexpr std::size_t VT_COLOUR_TABLE_SIZE = 256;
+
+		std::array<VTColourVector, VT_COLOUR_TABLE_SIZE> colourTable; ///< Colour table data
+	};
+
 	static constexpr std::uint16_t NULL_OBJECT_ID = 0xFFFF; ///< The NULL Object ID, usually drawn as blank space
 
 	/// @brief Generic VT object base class
@@ -90,7 +121,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a generic VT object. Sets up default values and the pointer to the member object pool
 		/// @param[in] memberObjectPool a pointer to the object tree that this object will be a member of
-		explicit VTObject(std::map<std::uint16_t, VTObject *> *memberObjectPool);
+		VTObject(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -98,7 +129,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		virtual std::uint32_t get_minumum_object_lenth() const = 0;
+		virtual std::uint32_t get_minumum_object_length() const = 0;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -137,8 +168,8 @@ namespace isobus
 		void set_background_color(std::uint8_t value);
 
 		/// @brief Returns a VT object from its member pool by ID, or the null id if it does not exist
-		/// @returns The object with the corresponding ID, or the null object ID if it was not located
-		VTObject *get_object_by_id(std::uint16_t objectID) const;
+		/// @returns The object with the corresponding ID
+		std::shared_ptr<VTObject> get_object_by_id(std::uint16_t objectID) const;
 
 		/// @brief Returns the number of child objects within this object
 		std::uint16_t get_number_children() const;
@@ -162,6 +193,35 @@ namespace isobus
 		/// @returns The relative Y position of the child, and always 0 if the index is out of range
 		std::int16_t get_child_y(std::uint16_t index) const;
 
+		/// @brief Sets the X offset of the child object associated with the specified index into the parent object
+		/// @param[in] index The child index to affect
+		/// @param[in] xOffset The relative X position of the child, and always 0 if the index is out of range
+		void set_child_x(std::uint16_t index, std::int16_t xOffset);
+
+		/// @brief Sets the Y offset of the child object associated with the specified index into the parent object
+		/// @param[in] index The child index to affect
+		/// @param[in] yOffset The relative Y position of the child, and always 0 if the index is out of range
+		void set_child_y(std::uint16_t index, std::int16_t yOffset);
+
+		/// @brief Offsets all child objects with the specified ID by the amount specified relative to its parent
+		/// @param[in] childObjectID The object ID of the children to offset
+		/// @param[in] xOffset The relative amount to offset the object(s) by in the X axis
+		/// @param[in] yOffset The relative amount to offset the object(s) by in the Y axis
+		/// @returns true if any child matched the specified object ID, otherwise false if no children were found with the specified ID.
+		bool offset_all_children_x_with_id(std::uint16_t childObjectID, std::int8_t xOffset, std::int8_t yOffset);
+
+		/// @brief Removes an object reference from another object. All fields must exactly match for the object to be removed.
+		/// This is because objects can have multiple of the same child at different places, so we can't infer which one to
+		/// remove without the exact position.
+		/// @param[in] objectID The object ID of the child to remove
+		/// @param[in] relativeXLocation The X offset of this object to its parent
+		/// @param[in] relativeYLocation The Y offset of this object to its parent
+		void remove_child(std::uint16_t objectID, std::int16_t relativeXLocation, std::int16_t relativeYLocation);
+
+		/// @brief Removes the last added child object.
+		/// This is meant to be a faster way to deal with objects that only have a max of 1 child.
+		void pop_child();
+
 	protected:
 		/// @brief Storage for child object data
 		class ChildObjectData
@@ -182,7 +242,8 @@ namespace isobus
 			std::int16_t yLocation; ///< Relative Y location of the top left corner of the object
 		};
 
-		std::map<std::uint16_t, VTObject *> *thisObjectPool; ///< A pointer to the rest of the object pool. Convenient for lookups by object ID.
+		VTColourTable &colourTable; ///< A reference to the current object pool's colour table. Useful for rendering most objects.
+		std::map<std::uint16_t, std::shared_ptr<VTObject>> &thisObjectPool; ///< A pointer to the rest of the object pool. Convenient for lookups by object ID.
 		std::vector<ChildObjectData> children; ///< List of child objects
 		std::uint16_t objectID = NULL_OBJECT_ID; ///< Object identifier. Shall be unique within the object pool.
 		std::uint16_t width = 0; ///< The width of the object. Not always applicable, but often used.
@@ -197,7 +258,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a working set object
 		/// @param[in] parentObjectPool A pointer to the object pool this object is a member of
-		explicit WorkingSet(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		WorkingSet(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -205,7 +266,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -241,7 +302,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a data mask object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit DataMask(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		DataMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -249,7 +310,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -257,8 +318,6 @@ namespace isobus
 
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 12; ///< The fewest bytes of IOP data that can represent this object
-
-		std::uint16_t softKeyMask; ///< The object ID of a soft key mask, or the null object ID if none is to be rendered
 	};
 
 	/// @brief Similar to a data mask, but takes priority and will be shown over data masks.
@@ -285,7 +344,7 @@ namespace isobus
 
 		/// @brief Constructor for a alarm mask object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit AlarmMask(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		AlarmMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -293,7 +352,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -335,7 +394,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a container object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit Container(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		Container(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -343,7 +402,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -372,7 +431,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a soft key mask object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit SoftKeyMask(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		SoftKeyMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -380,7 +439,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -397,7 +456,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a key object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit Key(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		Key(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -405,7 +464,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -438,7 +497,7 @@ namespace isobus
 
 		/// @brief Constructor for a key group object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit KeyGroup(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		KeyGroup(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -446,7 +505,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -504,7 +563,7 @@ namespace isobus
 
 		/// @brief Constructor for a button object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit Button(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		Button(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -512,7 +571,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -562,7 +621,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for an input boolean object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit InputBoolean(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		InputBoolean(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -570,7 +629,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -633,7 +692,7 @@ namespace isobus
 
 		/// @brief Constructor for a input string object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit InputString(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		InputString(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -641,7 +700,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -732,7 +791,7 @@ namespace isobus
 
 		/// @brief Constructor for an input number object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit InputNumber(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		InputNumber(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -740,7 +799,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -831,7 +890,7 @@ namespace isobus
 		/// @brief Returns the state of a single option in the object's second option bitfield
 		/// @param[in] option The option to check the value of in the object's second option bitfield
 		/// @returns The state of the associated option bit
-		bool get_option2(Options option) const;
+		bool get_option2(Options2 option) const;
 
 		/// @brief Sets the second options bitfield for this object to a new value
 		/// @param[in] value The new value for the second options bitfield
@@ -840,7 +899,7 @@ namespace isobus
 		/// @brief Sets a single option in the second options bitfield to the specified value
 		/// @param[in] option The option to set
 		/// @param[in] value The new value of the option bit
-		void set_option2(Options option, bool value);
+		void set_option2(Options2 option, bool value);
 
 		/// @brief Returns the value of the input number (only matters if there's no child number variable object).
 		/// @returns The value of the input number
@@ -879,7 +938,7 @@ namespace isobus
 
 		/// @brief Constructor for an input list object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit InputList(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		InputList(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -887,7 +946,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -955,7 +1014,7 @@ namespace isobus
 
 		/// @brief Constructor for an output string object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputString(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		OutputString(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -963,7 +1022,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -1045,7 +1104,7 @@ namespace isobus
 
 		/// @brief Constructor for an output number object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		OutputNumber(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		OutputNumber(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1053,7 +1112,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -1147,7 +1206,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for an output list object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputList(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		OutputList(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1155,7 +1214,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -1184,9 +1243,16 @@ namespace isobus
 	class OutputLine : public VTObject
 	{
 	public:
+		/// @brief Enumerates the different directions a line can be drawn
+		enum class LineDirection : std::uint8_t
+		{
+			TopLeftToBottomRight = 0,
+			BottomLeftToTopRight = 1
+		};
+
 		/// @brief Constructor for an output line object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputLine(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		OutputLine(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1194,7 +1260,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -1205,14 +1271,14 @@ namespace isobus
 		/// enclosing virtual rectangle. When the line direction is 1, the line is drawn from bottom left to top right of
 		/// enclosing virtual rectangle.
 		/// @returns The line's direction (see details).
-		std::uint8_t get_line_direction() const;
+		LineDirection get_line_direction() const;
 
 		/// @brief Sets the line's direction.
 		/// @details When the line direction is zero, the ine is drawn from top left to bottom right of
 		/// enclosing virtual rectangle. When the line direction is 1, the line is drawn from bottom left to top right of
 		/// enclosing virtual rectangle.
 		/// @param[in] value The line direction to set (see details).
-		void set_line_direction(std::uint8_t value);
+		void set_line_direction(LineDirection value);
 
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 11; ///< The fewest bytes of IOP data that can represent this object
@@ -1235,7 +1301,7 @@ namespace isobus
 
 		/// @brief Constructor for an output rectangle object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputRectangle(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		OutputRectangle(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1243,7 +1309,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -1273,14 +1339,14 @@ namespace isobus
 		enum class EllipseType
 		{
 			Closed = 0, ///< Closed ellipse
-			OpenDefinedByStartEndAngles = 1, ///< The ellise is defined by start and end angles
+			OpenDefinedByStartEndAngles = 1, ///< The ellipse is defined by start and end angles
 			ClosedEllipseSegment = 2,
 			ClosedEllipseSection = 3
 		};
 
 		/// @brief Constructor for an output ellipse object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputEllipse(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		OutputEllipse(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1288,7 +1354,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -1355,7 +1421,7 @@ namespace isobus
 
 		/// @brief Constructor for an output polygon object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputPolygon(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		OutputPolygon(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1363,7 +1429,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -1373,6 +1439,10 @@ namespace isobus
 		/// @param[in] x The X value of a point relative to the top left corner	of the polygon
 		/// @param[in] y The Y value of a point relative to the top left corner	of the polygon
 		void add_point(std::uint16_t x, std::uint16_t y);
+
+		/// @brief Returns the number of polygon points
+		/// @returns The number of polygon points
+		std::uint8_t get_number_of_points() const;
 
 		/// @brief Returns a point from the polygon by index
 		/// @param[in] index The index of the point to retrieve
@@ -1409,7 +1479,7 @@ namespace isobus
 
 		/// @brief Constructor for an output meter object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputMeter(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		OutputMeter(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1417,7 +1487,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -1535,17 +1605,17 @@ namespace isobus
 		/// @brief Options that can be applied to the input number
 		enum class Options : std::uint8_t
 		{
-			DrawArc = 0, ///< Draw Arc
-			DrawBorder = 1, ///< Draw Border
+			DrawBorder = 0, ///< Draw Border
+			DrawTargetLine = 1, ///< Draw Target Line
 			DrawTicks = 2, ///< Draw Ticks
-			BarGraphType = 3, ///< 0 = Filled, 1 = not filled
+			BarGraphType = 3, ///< 0 = Filled, 1 = not filled with value line
 			AxisOrientation = 4, ///< 0 = vertical, 1 = horizontal
 			Direction = 5 ///< 0 = Grows negative, 1 = Grows positive
 		};
 
 		/// @brief Constructor for an output linear bar graph object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputLinearBarGraph(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		OutputLinearBarGraph(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1553,7 +1623,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -1566,7 +1636,7 @@ namespace isobus
 		/// @brief Sets the minimum value on the graph.
 		/// @details Used to scale the graph's range. Values below this will be clamped to the min.
 		/// @param[in] value The minimum value to set
-		void set_min_value(std::uint8_t value);
+		void set_min_value(std::uint16_t value);
 
 		/// @brief Returns the max value for the graph
 		/// @returns The max value for the graph
@@ -1574,7 +1644,7 @@ namespace isobus
 
 		/// @brief Sets the max value for the graph
 		/// @param[in] value The max value to set for the graph
-		void set_max_value(std::uint8_t value);
+		void set_max_value(std::uint16_t value);
 
 		/// @brief Returns the value of the graph (only matters if there's no child number variable object).
 		/// @returns The value of the graph
@@ -1582,7 +1652,7 @@ namespace isobus
 
 		/// @brief Sets the value of the graph (only matters if there's no child number variable object).
 		/// @param[in] value The value to set for the graph
-		void set_value(std::uint8_t value);
+		void set_value(std::uint16_t value);
 
 		/// @brief Returns the graph's target value (only matters if there's no target value reference).
 		/// @returns The graph's target value
@@ -1590,7 +1660,7 @@ namespace isobus
 
 		/// @brief Sets the target value for the graph (only matters if there's no target value reference).
 		/// @param[in] value The target value to set
-		void set_target_value(std::uint8_t value);
+		void set_target_value(std::uint16_t value);
 
 		/// @brief Returns the target value reference object ID
 		/// @details This object will be used (if it's not NULL_OBJECT_ID)
@@ -1673,7 +1743,7 @@ namespace isobus
 
 		/// @brief Constructor for an output arched bar graph object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit OutputArchedBarGraph(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		OutputArchedBarGraph(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1681,7 +1751,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -1827,7 +1897,7 @@ namespace isobus
 
 		/// @brief Constructor for a picture graphic (bitmap) object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit PictureGraphic(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		PictureGraphic(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1835,7 +1905,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -1926,7 +1996,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a number variable object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit NumberVariable(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		NumberVariable(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1934,7 +2004,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -1960,7 +2030,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a string variable object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit StringVariable(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		StringVariable(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -1968,7 +2038,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -2043,7 +2113,7 @@ namespace isobus
 
 		/// @brief Constructor for a font attributes object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit FontAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		FontAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2051,7 +2121,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -2099,6 +2169,14 @@ namespace isobus
 		/// @param[in] value An index into the VT colour table associated to the desired colour
 		void set_colour(std::uint8_t value);
 
+		/// @brief Returns the width of the associated font size in pixels
+		/// @returns The width of the associated font size in pixels
+		std::uint8_t get_font_width_pixels() const;
+
+		/// @brief Returns the height of the associated font size in pixels
+		/// @returns The height of the associated font size in pixels
+		std::uint8_t get_font_height_pixels() const;
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 8; ///< The fewest bytes of IOP data that can represent this object
 
@@ -2114,7 +2192,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a line attributes object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit LineAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		LineAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2122,7 +2200,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -2157,7 +2235,7 @@ namespace isobus
 
 		/// @brief Constructor for a fill attributes object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit FillAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		FillAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2165,7 +2243,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -2200,7 +2278,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a input attributes object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit InputAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		InputAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2208,7 +2286,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -2244,7 +2322,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for an extended input attributes object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit ExtendedInputAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		ExtendedInputAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2252,7 +2330,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -2296,7 +2374,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a object pointer object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit ObjectPointer(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		ObjectPointer(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2304,7 +2382,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
@@ -2312,6 +2390,73 @@ namespace isobus
 
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 5; ///< The fewest bytes of IOP data that can represent this object
+	};
+
+	/// @brief The External Object Pointer object, available in VT version 5 and later, allows a Working Set to display
+	/// objects that exist in another Working Set’s object pool
+	class ExternalObjectPointer : public VTObject
+	{
+	public:
+		/// @brief Constructor for a object pointer object
+		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		ExternalObjectPointer(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+
+		/// @brief Returns the VT object type of the underlying derived object
+		/// @returns The VT object type of the underlying derived object
+		VirtualTerminalObjectType get_object_type() const override;
+
+		/// @brief Returns the minimum binary serialized length of the associated object
+		/// @returns The minimum binary serialized length of the associated object
+		std::uint32_t get_minumum_object_length() const override;
+
+		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @returns `true` if the object passed basic error checks
+		bool get_is_valid() const override;
+
+		/// @brief Returns the default object id which is the
+		/// object ID of an object which shall be displayed if the External Object ID is not valid,
+		/// or the NULL Object ID.
+		/// @returns The default object ID or the null object ID
+		std::uint16_t get_default_object_id() const;
+
+		/// @brief Sets the default object id which is the
+		/// object ID of an object which shall be displayed if the External Object ID is not valid,
+		/// or the NULL Object ID.
+		/// @param[in] id The default object ID or the null object ID
+		void set_default_object_id(std::uint16_t id);
+
+		/// @brief Returns the external reference NAME ID
+		/// @returns External reference NAME ID
+		std::uint16_t get_external_reference_name_id() const;
+
+		/// @brief Sets the external reference NAME ID
+		/// @param[in] id External reference NAME ID
+		void set_external_reference_name_id(std::uint16_t id);
+
+		/// @brief Returns the external object ID.
+		/// The referenced object is found in
+		/// the object pool of the Working Set Master
+		/// identified by the External Reference NAME
+		/// ID attribute and listed in the corresponding
+		/// External Object Definition object.
+		/// @returns The external object ID.
+		std::uint16_t get_external_object_id() const;
+
+		/// @brief Sets the external object ID.
+		/// The referenced object is found in
+		/// the object pool of the Working Set Master
+		/// identified by the External Reference NAME
+		/// ID attribute and listed in the corresponding
+		/// External Object Definition object.
+		/// @param[in] id The external object ID.
+		void set_external_object_id(std::uint16_t id);
+
+	private:
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 5; ///< The fewest bytes of IOP data that can represent this object
+
+		std::uint16_t defaultObjectID = NULL_OBJECT_ID; ///< Object ID of an object which shall be displayed if the External Object ID is not valid, or the NULL Object ID
+		std::uint16_t externalReferenceNAMEID = NULL_OBJECT_ID; ///< Object id of an External Reference NAME object or the NULL Object ID
+		std::uint16_t externalObjectID = NULL_OBJECT_ID; ///< Object ID of a referenced object or the NULL Object ID
 	};
 
 	/// @brief Defines a macro object. Performs a list of commands based on a message or event.
@@ -2353,7 +2498,7 @@ namespace isobus
 
 		/// @brief Constructor for a macro object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit Macro(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		Macro(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2361,15 +2506,24 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
 
+		bool add_command_packet(std::array<std::uint8_t, CAN_DATA_LENGTH> command);
+
+		std::uint8_t get_number_of_commands() const;
+
+		bool get_command_packet(std::uint8_t index, std::array<std::uint8_t, CAN_DATA_LENGTH> &command);
+
+		bool remove_command_packet(std::uint8_t index);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 5; ///< The fewest bytes of IOP data that can represent this object
-		/// @todo Finish VT Macro implementation
+		static const std::array<std::uint8_t, 28> ALLOWED_COMMANDS_LOOKUP_TABLE; ///< The list of all allowed commands in a table for easy lookup when validating macro content
+		std::vector<std::array<std::uint8_t, CAN_DATA_LENGTH>> commandPackets; ///< Macro command list
 	};
 
 	/// @brief Defines a colour map object
@@ -2378,7 +2532,7 @@ namespace isobus
 	public:
 		/// @brief Constructor for a colour map object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
-		explicit ColourMap(std::map<std::uint16_t, VTObject *> *parentObjectPool);
+		ColourMap(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
 		/// @returns The VT object type of the underlying derived object
@@ -2386,7 +2540,7 @@ namespace isobus
 
 		/// @brief Returns the minimum binary serialized length of the associated object
 		/// @returns The minimum binary serialized length of the associated object
-		std::uint32_t get_minumum_object_lenth() const override;
+		std::uint32_t get_minumum_object_length() const override;
 
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks

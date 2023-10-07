@@ -12,10 +12,59 @@
 
 namespace isobus
 {
-	VTObject::VTObject(std::map<std::uint16_t, VTObject *> *memberObjectPool) :
+	VTColourTable::VTColourTable()
+	{
+		// The table can be altered at runtime. Init here to VT standard
+		colourTable[0] = VTColourVector(0.0f, 0.0f, 0.0f); // Black
+		colourTable[1] = VTColourVector(1.0f, 1.0f, 1.0f); // White
+		colourTable[2] = VTColourVector(0.0f, (153.0f / 255.0f), 0.0f); // Green
+		colourTable[3] = VTColourVector(0.0f, (153.0f / 255.0f), (153.0f / 255.0f)); // Teal
+		colourTable[4] = VTColourVector((153.0f / 255.0f), 0.0f, 0.0f); // Maroon
+		colourTable[5] = VTColourVector((153.0f / 255.0f), 0.0f, (153.0f / 255.0f)); // Purple
+		colourTable[6] = VTColourVector((153.0f / 255.0f), (153.0f / 255.0f), 0.0f); // Olive
+		colourTable[7] = VTColourVector((204.0f / 255.0f), (204.0f / 255.0f), (204.0f / 255.0f)); // Silver
+		colourTable[8] = VTColourVector((153.0f / 255.0f), (153.0f / 255.0f), (153.0f / 255.0f)); // Grey
+		colourTable[9] = VTColourVector(0.0f, 0.0f, 1.0f); // Blue
+		colourTable[10] = VTColourVector(0.0f, 1.0f, 0.0f); // Lime
+		colourTable[11] = VTColourVector(0.0f, 1.0f, 1.0f); // Cyan
+		colourTable[12] = VTColourVector(1.0f, 0.0f, 0.0f); // Red
+		colourTable[13] = VTColourVector(1.0f, 0.0f, 1.0f); // Magenta
+		colourTable[14] = VTColourVector(1.0f, 1.0f, 0.0f); // Yellow
+		colourTable[15] = VTColourVector(0.0f, 0.0f, (153.0f / 255.0f)); // Navy
+
+		// This section of the table increases with a pattern
+		for (std::uint8_t i = 16; i <= 231; i++)
+		{
+			std::uint8_t index = i - 16;
+
+			std::uint32_t redCounter = (index / 36);
+			std::uint32_t greenCounter = ((index / 6) % 6);
+			std::uint32_t blueCounter = (index % 6);
+
+			colourTable[i] = VTColourVector((51.0f * (redCounter) / 255.0f), ((51.0f * (greenCounter)) / 255.0f), ((51.0f * blueCounter) / 255.0f));
+		}
+
+		// The rest are proprietary. Init to white for now.
+		for (std::uint16_t i = 232; i < VT_COLOUR_TABLE_SIZE; i++)
+		{
+			colourTable[i] = VTColourVector(1.0f, 1.0f, 1.0f);
+		}
+	}
+
+	VTColourVector VTColourTable::get_colour(std::uint8_t colorIndex) const
+	{
+		return colourTable.at(colorIndex);
+	}
+
+	void VTColourTable::set_colour(std::uint8_t colorIndex, VTColourVector newColour)
+	{
+		colourTable.at(colorIndex) = newColour;
+	}
+
+	VTObject::VTObject(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  colourTable(currentColourTable),
 	  thisObjectPool(memberObjectPool)
 	{
-		assert(nullptr != thisObjectPool);
 	}
 
 	std::uint16_t VTObject::get_id() const
@@ -58,14 +107,14 @@ namespace isobus
 		backgroundColor = value;
 	}
 
-	VTObject *VTObject::get_object_by_id(std::uint16_t objectID) const
+	std::shared_ptr<VTObject> VTObject::get_object_by_id(std::uint16_t objectID) const
 	{
-		return (*thisObjectPool)[objectID];
+		return thisObjectPool[objectID];
 	}
 
 	std::uint16_t VTObject::get_number_children() const
 	{
-		return children.size();
+		return static_cast<std::uint16_t>(children.size());
 	}
 
 	void VTObject::add_child(std::uint16_t objectID, std::int16_t relativeXLocation, std::int16_t relativeYLocation)
@@ -106,6 +155,57 @@ namespace isobus
 		return retVal;
 	}
 
+	void VTObject::set_child_x(std::uint16_t index, std::int16_t xOffset)
+	{
+		if (index < children.size())
+		{
+			children.at(index).xLocation = xOffset;
+		}
+	}
+
+	void VTObject::set_child_y(std::uint16_t index, std::int16_t yOffset)
+	{
+		if (index < children.size())
+		{
+			children.at(index).yLocation = yOffset;
+		}
+	}
+
+	bool VTObject::offset_all_children_x_with_id(std::uint16_t childObjectID, std::int8_t xOffset, std::int8_t yOffset)
+	{
+		bool retVal = false;
+
+		for (auto &child : children)
+		{
+			if (child.id == childObjectID)
+			{
+				child.xLocation += xOffset;
+				child.yLocation += yOffset;
+			}
+		}
+		return retVal;
+	}
+
+	void VTObject::remove_child(std::uint16_t objectID, std::int16_t relativeXLocation, std::int16_t relativeYLocation)
+	{
+		for (auto child = children.begin(); child != children.end(); child++)
+		{
+			if ((child->id == objectID) && (child->xLocation == relativeXLocation) && (child->yLocation == relativeYLocation))
+			{
+				children.erase(child);
+				break;
+			}
+		}
+	}
+
+	void VTObject::pop_child()
+	{
+		if (!children.empty())
+		{
+			children.pop_back();
+		}
+	}
+
 	VTObject::ChildObjectData::ChildObjectData() :
 	  id(NULL_OBJECT_ID),
 	  xLocation(0),
@@ -122,8 +222,8 @@ namespace isobus
 	{
 	}
 
-	WorkingSet::WorkingSet(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	WorkingSet::WorkingSet(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  activeMask(NULL_OBJECT_ID),
 	  selectable(false)
 	{
@@ -134,7 +234,7 @@ namespace isobus
 		return VirtualTerminalObjectType::WorkingSet;
 	}
 
-	std::uint32_t WorkingSet::get_minumum_object_lenth() const
+	std::uint32_t WorkingSet::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -143,9 +243,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -201,9 +301,8 @@ namespace isobus
 		activeMask = value;
 	}
 
-	DataMask::DataMask(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
-	  softKeyMask(NULL_OBJECT_ID)
+	DataMask::DataMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable)
 	{
 	}
 
@@ -212,7 +311,7 @@ namespace isobus
 		return VirtualTerminalObjectType::DataMask;
 	}
 
-	std::uint32_t DataMask::get_minumum_object_lenth() const
+	std::uint32_t DataMask::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -221,9 +320,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -269,8 +368,8 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	AlarmMask::AlarmMask(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	AlarmMask::AlarmMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  softKeyMask(0),
 	  maskPriority(Priority::Low),
 	  signalPriority(AcousticSignal::None)
@@ -282,7 +381,7 @@ namespace isobus
 		return VirtualTerminalObjectType::AlarmMask;
 	}
 
-	std::uint32_t AlarmMask::get_minumum_object_lenth() const
+	std::uint32_t AlarmMask::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -291,9 +390,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -358,8 +457,8 @@ namespace isobus
 		signalPriority = value;
 	}
 
-	Container::Container(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	Container::Container(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  hidden(false)
 	{
 	}
@@ -369,7 +468,7 @@ namespace isobus
 		return VirtualTerminalObjectType::Container;
 	}
 
-	std::uint32_t Container::get_minumum_object_lenth() const
+	std::uint32_t Container::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -378,9 +477,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -437,8 +536,8 @@ namespace isobus
 		hidden = value;
 	}
 
-	SoftKeyMask::SoftKeyMask(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool)
+	SoftKeyMask::SoftKeyMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable)
 	{
 	}
 
@@ -447,7 +546,7 @@ namespace isobus
 		return VirtualTerminalObjectType::SoftKeyMask;
 	}
 
-	std::uint32_t SoftKeyMask::get_minumum_object_lenth() const
+	std::uint32_t SoftKeyMask::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -456,9 +555,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -483,8 +582,8 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	Key::Key(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	Key::Key(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  keyCode(0)
 	{
 	}
@@ -494,7 +593,7 @@ namespace isobus
 		return VirtualTerminalObjectType::Key;
 	}
 
-	std::uint32_t Key::get_minumum_object_lenth() const
+	std::uint32_t Key::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -503,9 +602,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -554,8 +653,8 @@ namespace isobus
 		keyCode = value;
 	}
 
-	KeyGroup::KeyGroup(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	KeyGroup::KeyGroup(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  keyGroupIcon(NULL_OBJECT_ID)
 	{
 	}
@@ -565,7 +664,7 @@ namespace isobus
 		return VirtualTerminalObjectType::KeyGroup;
 	}
 
-	std::uint32_t KeyGroup::get_minumum_object_lenth() const
+	std::uint32_t KeyGroup::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -574,9 +673,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -632,8 +731,8 @@ namespace isobus
 		}
 	}
 
-	Button::Button(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	Button::Button(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  borderColour(0),
 	  keyCode(0),
 	  optionsBitfield(0)
@@ -645,7 +744,7 @@ namespace isobus
 		return VirtualTerminalObjectType::Button;
 	}
 
-	std::uint32_t Button::get_minumum_object_lenth() const
+	std::uint32_t Button::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -654,9 +753,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -736,8 +835,8 @@ namespace isobus
 		}
 	}
 
-	InputBoolean::InputBoolean(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	InputBoolean::InputBoolean(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  value(0),
 	  enabled(false)
 	{
@@ -748,7 +847,7 @@ namespace isobus
 		return VirtualTerminalObjectType::InputBoolean;
 	}
 
-	std::uint32_t InputBoolean::get_minumum_object_lenth() const
+	std::uint32_t InputBoolean::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -757,9 +856,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -801,8 +900,8 @@ namespace isobus
 		enabled = value;
 	}
 
-	InputString::InputString(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	InputString::InputString(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  optionsBitfield(0),
 	  justificationBitfield(0),
 	  length(0),
@@ -815,7 +914,7 @@ namespace isobus
 		return VirtualTerminalObjectType::InputString;
 	}
 
-	std::uint32_t InputString::get_minumum_object_lenth() const
+	std::uint32_t InputString::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -824,9 +923,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -897,8 +996,8 @@ namespace isobus
 		justificationBitfield = value;
 	}
 
-	InputNumber::InputNumber(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	InputNumber::InputNumber(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  scale(0.0f),
 	  maximumValue(0),
 	  minimumValue(0),
@@ -917,7 +1016,7 @@ namespace isobus
 		return VirtualTerminalObjectType::InputNumber;
 	}
 
-	std::uint32_t InputNumber::get_minumum_object_lenth() const
+	std::uint32_t InputNumber::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -926,9 +1025,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -1048,7 +1147,7 @@ namespace isobus
 		}
 	}
 
-	bool InputNumber::get_option2(Options option) const
+	bool InputNumber::get_option2(Options2 option) const
 	{
 		return (0 != ((1 << static_cast<std::uint8_t>(option)) & options2));
 	}
@@ -1058,7 +1157,7 @@ namespace isobus
 		options2 = value;
 	}
 
-	void InputNumber::set_option2(Options option, bool value)
+	void InputNumber::set_option2(Options2 option, bool value)
 	{
 		if (value)
 		{
@@ -1080,8 +1179,8 @@ namespace isobus
 		value = inputValue;
 	}
 
-	InputList::InputList(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	InputList::InputList(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  numberOfListItems(0),
 	  optionsBitfield(0),
 	  value(0)
@@ -1093,7 +1192,7 @@ namespace isobus
 		return VirtualTerminalObjectType::InputList;
 	}
 
-	std::uint32_t InputList::get_minumum_object_lenth() const
+	std::uint32_t InputList::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -1102,9 +1201,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -1129,7 +1228,7 @@ namespace isobus
 
 	bool InputList::get_option(Options option) const
 	{
-		return false;
+		return (0 != (optionsBitfield & (1 << static_cast<std::uint8_t>(option))));
 	}
 
 	void InputList::set_options(std::uint8_t value)
@@ -1159,8 +1258,8 @@ namespace isobus
 		value = inputValue;
 	}
 
-	OutputString::OutputString(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	OutputString::OutputString(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  optionsBitfield(0),
 	  justificationBitfield(0),
 	  length(0)
@@ -1172,7 +1271,7 @@ namespace isobus
 		return VirtualTerminalObjectType::OutputString;
 	}
 
-	std::uint32_t OutputString::get_minumum_object_lenth() const
+	std::uint32_t OutputString::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -1181,9 +1280,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -1208,15 +1307,24 @@ namespace isobus
 
 	bool OutputString::get_option(Options option) const
 	{
-		return false;
+		return (0 != (optionsBitfield & (1 << static_cast<std::uint8_t>(option))));
 	}
 
 	void OutputString::set_options(std::uint8_t value)
 	{
+		optionsBitfield = value;
 	}
 
 	void OutputString::set_option(Options option, bool value)
 	{
+		if (value)
+		{
+			optionsBitfield |= (1 << static_cast<std::uint8_t>(option));
+		}
+		else
+		{
+			optionsBitfield &= ~(1 << static_cast<std::uint8_t>(option));
+		}
 	}
 
 	OutputString::HorizontalJustification OutputString::get_horizontal_justification() const
@@ -1244,8 +1352,8 @@ namespace isobus
 		stringValue = value;
 	}
 
-	OutputNumber::OutputNumber(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	OutputNumber::OutputNumber(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  scale(0.0f),
 	  offset(0),
 	  value(0),
@@ -1261,7 +1369,7 @@ namespace isobus
 		return VirtualTerminalObjectType::OutputNumber;
 	}
 
-	std::uint32_t OutputNumber::get_minumum_object_lenth() const
+	std::uint32_t OutputNumber::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -1270,9 +1378,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -1382,8 +1490,8 @@ namespace isobus
 		value = inputValue;
 	}
 
-	OutputList::OutputList(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	OutputList::OutputList(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  numberOfListItems(0),
 	  value(0)
 	{
@@ -1394,7 +1502,7 @@ namespace isobus
 		return VirtualTerminalObjectType::OutputList;
 	}
 
-	std::uint32_t OutputList::get_minumum_object_lenth() const
+	std::uint32_t OutputList::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -1403,9 +1511,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -1443,8 +1551,8 @@ namespace isobus
 		value = aValue;
 	}
 
-	OutputLine::OutputLine(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	OutputLine::OutputLine(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  lineDirection(0)
 	{
 	}
@@ -1458,9 +1566,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -1482,23 +1590,23 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
-	std::uint32_t OutputLine::get_minumum_object_lenth() const
+	std::uint32_t OutputLine::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
 
-	std::uint8_t OutputLine::get_line_direction() const
+	OutputLine::LineDirection OutputLine::get_line_direction() const
 	{
-		return lineDirection;
+		return static_cast<LineDirection>(lineDirection);
 	}
 
-	void OutputLine::set_line_direction(std::uint8_t value)
+	void OutputLine::set_line_direction(LineDirection value)
 	{
-		lineDirection = value;
+		lineDirection = static_cast<std::uint8_t>(value);
 	}
 
-	OutputRectangle::OutputRectangle(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	OutputRectangle::OutputRectangle(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  lineSuppressionBitfield(0)
 	{
 	}
@@ -1508,7 +1616,7 @@ namespace isobus
 		return VirtualTerminalObjectType::OutputRectangle;
 	}
 
-	std::uint32_t OutputRectangle::get_minumum_object_lenth() const
+	std::uint32_t OutputRectangle::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -1517,9 +1625,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -1552,8 +1660,8 @@ namespace isobus
 		lineSuppressionBitfield = value;
 	}
 
-	OutputEllipse::OutputEllipse(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	OutputEllipse::OutputEllipse(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  ellipseType(0),
 	  startAngle(0),
 	  endAngle(0)
@@ -1565,7 +1673,7 @@ namespace isobus
 		return VirtualTerminalObjectType::OutputEllipse;
 	}
 
-	std::uint32_t OutputEllipse::get_minumum_object_lenth() const
+	std::uint32_t OutputEllipse::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -1574,9 +1682,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -1629,8 +1737,8 @@ namespace isobus
 		endAngle = value;
 	}
 
-	OutputPolygon::OutputPolygon(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	OutputPolygon::OutputPolygon(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  polygonType(0)
 	{
 	}
@@ -1640,7 +1748,7 @@ namespace isobus
 		return VirtualTerminalObjectType::OutputPolygon;
 	}
 
-	std::uint32_t OutputPolygon::get_minumum_object_lenth() const
+	std::uint32_t OutputPolygon::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -1649,9 +1757,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -1679,6 +1787,11 @@ namespace isobus
 		pointList.push_back({ x, y });
 	}
 
+	std::uint8_t OutputPolygon::get_number_of_points() const
+	{
+		return static_cast<std::uint8_t>(pointList.size());
+	}
+
 	OutputPolygon::PolygonPoint OutputPolygon::get_point(std::uint8_t index)
 	{
 		PolygonPoint retVal = { 0, 0 };
@@ -1700,8 +1813,8 @@ namespace isobus
 		polygonType = static_cast<std::uint8_t>(value);
 	}
 
-	OutputMeter::OutputMeter(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	OutputMeter::OutputMeter(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  minValue(0),
 	  maxValue(0),
 	  value(0),
@@ -1720,7 +1833,7 @@ namespace isobus
 		return VirtualTerminalObjectType::OutputMeter;
 	}
 
-	std::uint32_t OutputMeter::get_minumum_object_lenth() const
+	std::uint32_t OutputMeter::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -1729,9 +1842,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -1865,8 +1978,8 @@ namespace isobus
 		endAngle = value;
 	}
 
-	OutputLinearBarGraph::OutputLinearBarGraph(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	OutputLinearBarGraph::OutputLinearBarGraph(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  minValue(0),
 	  maxValue(0),
 	  targetValue(0),
@@ -1884,7 +1997,7 @@ namespace isobus
 		return VirtualTerminalObjectType::OutputLinearBarGraph;
 	}
 
-	std::uint32_t OutputLinearBarGraph::get_minumum_object_lenth() const
+	std::uint32_t OutputLinearBarGraph::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -1893,9 +2006,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -1922,7 +2035,7 @@ namespace isobus
 		return minValue;
 	}
 
-	void OutputLinearBarGraph::set_min_value(std::uint8_t value)
+	void OutputLinearBarGraph::set_min_value(std::uint16_t value)
 	{
 		minValue = value;
 	}
@@ -1932,7 +2045,7 @@ namespace isobus
 		return maxValue;
 	}
 
-	void OutputLinearBarGraph::set_max_value(std::uint8_t value)
+	void OutputLinearBarGraph::set_max_value(std::uint16_t value)
 	{
 		maxValue = value;
 	}
@@ -1942,7 +2055,7 @@ namespace isobus
 		return value;
 	}
 
-	void OutputLinearBarGraph::set_value(std::uint8_t aValue)
+	void OutputLinearBarGraph::set_value(std::uint16_t aValue)
 	{
 		value = aValue;
 	}
@@ -1952,7 +2065,7 @@ namespace isobus
 		return targetValue;
 	}
 
-	void OutputLinearBarGraph::set_target_value(std::uint8_t value)
+	void OutputLinearBarGraph::set_target_value(std::uint16_t value)
 	{
 		targetValue = value;
 	}
@@ -2019,8 +2132,8 @@ namespace isobus
 		}
 	}
 
-	OutputArchedBarGraph::OutputArchedBarGraph(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	OutputArchedBarGraph::OutputArchedBarGraph(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  barGraphWidth(0),
 	  minValue(0),
 	  maxValue(0),
@@ -2040,7 +2153,7 @@ namespace isobus
 		return VirtualTerminalObjectType::OutputArchedBarGraph;
 	}
 
-	std::uint32_t OutputArchedBarGraph::get_minumum_object_lenth() const
+	std::uint32_t OutputArchedBarGraph::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -2049,9 +2162,9 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto child : children)
+		for (auto &child : children)
 		{
-			VTObject *childObject = get_object_by_id(child.id);
+			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
@@ -2195,8 +2308,8 @@ namespace isobus
 		targetValueReference = value;
 	}
 
-	PictureGraphic::PictureGraphic(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	PictureGraphic::PictureGraphic(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  numberOfBytesInRawData(0),
 	  actualWidth(0),
 	  actualHeight(0),
@@ -2211,7 +2324,7 @@ namespace isobus
 		return VirtualTerminalObjectType::PictureGraphic;
 	}
 
-	std::uint32_t PictureGraphic::get_minumum_object_lenth() const
+	std::uint32_t PictureGraphic::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -2315,8 +2428,8 @@ namespace isobus
 		transparencyColour = value;
 	}
 
-	NumberVariable::NumberVariable(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	NumberVariable::NumberVariable(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  value(0)
 	{
 	}
@@ -2326,7 +2439,7 @@ namespace isobus
 		return VirtualTerminalObjectType::NumberVariable;
 	}
 
-	std::uint32_t NumberVariable::get_minumum_object_lenth() const
+	std::uint32_t NumberVariable::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -2346,8 +2459,8 @@ namespace isobus
 		value = aValue;
 	}
 
-	StringVariable::StringVariable(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool)
+	StringVariable::StringVariable(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable)
 	{
 	}
 
@@ -2356,7 +2469,7 @@ namespace isobus
 		return VirtualTerminalObjectType::StringVariable;
 	}
 
-	std::uint32_t StringVariable::get_minumum_object_lenth() const
+	std::uint32_t StringVariable::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -2376,8 +2489,8 @@ namespace isobus
 		value = aValue;
 	}
 
-	FontAttributes::FontAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	FontAttributes::FontAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  colour(0),
 	  size(0),
 	  type(0),
@@ -2390,7 +2503,7 @@ namespace isobus
 		return VirtualTerminalObjectType::FontAttributes;
 	}
 
-	std::uint32_t FontAttributes::get_minumum_object_lenth() const
+	std::uint32_t FontAttributes::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -2450,8 +2563,162 @@ namespace isobus
 		colour = value;
 	}
 
-	LineAttributes::LineAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	std::uint8_t FontAttributes::get_font_width_pixels() const
+	{
+		std::uint8_t retVal = 0;
+
+		switch (static_cast<FontSize>(size))
+		{
+			case FontSize::Size6x8:
+			{
+				retVal = 6;
+			}
+			break;
+
+			case FontSize::Size8x8:
+			case FontSize::Size8x12:
+			{
+				retVal = 8;
+			}
+			break;
+
+			case FontSize::Size12x16:
+			{
+				retVal = 12;
+			}
+			break;
+
+			case FontSize::Size16x16:
+			case FontSize::Size16x24:
+			{
+				retVal = 16;
+			}
+			break;
+
+			case FontSize::Size24x32:
+			{
+				retVal = 24;
+			}
+			break;
+
+			case FontSize::Size32x32:
+			case FontSize::Size32x48:
+			{
+				retVal = 32;
+			}
+			break;
+
+			case FontSize::Size48x64:
+			{
+				retVal = 48;
+			}
+			break;
+
+			case FontSize::Size64x64:
+			case FontSize::Size64x96:
+			{
+				retVal = 64;
+			}
+			break;
+
+			case FontSize::Size96x128:
+			{
+				retVal = 96;
+			}
+			break;
+
+			case FontSize::Size128x128:
+			case FontSize::Size128x192:
+			{
+				retVal = 128;
+			}
+			break;
+
+			default:
+				break;
+		}
+		return retVal;
+	}
+
+	std::uint8_t FontAttributes::get_font_height_pixels() const
+	{
+		std::uint8_t retVal = 0;
+
+		switch (static_cast<FontSize>(size))
+		{
+			case FontSize::Size6x8:
+			case FontSize::Size8x8:
+			{
+				retVal = 8;
+			}
+			break;
+
+			case FontSize::Size8x12:
+			{
+				retVal = 12;
+			}
+			break;
+
+			case FontSize::Size12x16:
+			case FontSize::Size16x16:
+			{
+				retVal = 16;
+			}
+			break;
+
+			case FontSize::Size16x24:
+			{
+				retVal = 24;
+			}
+			break;
+
+			case FontSize::Size24x32:
+			case FontSize::Size32x32:
+			{
+				retVal = 32;
+			}
+			break;
+
+			case FontSize::Size32x48:
+			{
+				retVal = 48;
+			}
+			break;
+
+			case FontSize::Size48x64:
+			case FontSize::Size64x64:
+			{
+				retVal = 64;
+			}
+			break;
+
+			case FontSize::Size64x96:
+			{
+				retVal = 96;
+			}
+			break;
+
+			case FontSize::Size96x128:
+			case FontSize::Size128x128:
+			{
+				retVal = 128;
+			}
+			break;
+
+			case FontSize::Size128x192:
+			{
+				retVal = 192;
+			}
+			break;
+
+			default:
+				break;
+		}
+		return retVal;
+	}
+
+	LineAttributes::LineAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  lineArtBitpattern(0)
 	{
 	}
@@ -2461,7 +2728,7 @@ namespace isobus
 		return VirtualTerminalObjectType::LineAttributes;
 	}
 
-	std::uint32_t LineAttributes::get_minumum_object_lenth() const
+	std::uint32_t LineAttributes::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -2481,8 +2748,8 @@ namespace isobus
 		lineArtBitpattern = value;
 	}
 
-	FillAttributes::FillAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	FillAttributes::FillAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  fillPattern(NULL_OBJECT_ID),
 	  type(FillType::NoFill)
 	{
@@ -2493,7 +2760,7 @@ namespace isobus
 		return VirtualTerminalObjectType::FillAttributes;
 	}
 
-	std::uint32_t FillAttributes::get_minumum_object_lenth() const
+	std::uint32_t FillAttributes::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -2523,8 +2790,8 @@ namespace isobus
 		type = value;
 	}
 
-	InputAttributes::InputAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	InputAttributes::InputAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  validationType(0)
 	{
 	}
@@ -2534,7 +2801,7 @@ namespace isobus
 		return VirtualTerminalObjectType::InputAttributes;
 	}
 
-	std::uint32_t InputAttributes::get_minumum_object_lenth() const
+	std::uint32_t InputAttributes::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -2564,8 +2831,8 @@ namespace isobus
 		validationType = value;
 	}
 
-	ExtendedInputAttributes::ExtendedInputAttributes(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool),
+	ExtendedInputAttributes::ExtendedInputAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable),
 	  validationType(0)
 	{
 	}
@@ -2575,7 +2842,7 @@ namespace isobus
 		return VirtualTerminalObjectType::ExtendedInputAttributes;
 	}
 
-	std::uint32_t ExtendedInputAttributes::get_minumum_object_lenth() const
+	std::uint32_t ExtendedInputAttributes::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -2587,7 +2854,7 @@ namespace isobus
 
 	std::uint8_t ExtendedInputAttributes::get_number_of_code_planes() const
 	{
-		return codePlanes.size();
+		return static_cast<std::uint8_t>(codePlanes.size());
 	}
 
 	void ExtendedInputAttributes::set_number_of_code_planes(std::uint8_t value)
@@ -2605,17 +2872,17 @@ namespace isobus
 		validationType = value;
 	}
 
-	ObjectPointer::ObjectPointer(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool)
+	ObjectPointer::ObjectPointer(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable)
 	{
 	}
 
 	VirtualTerminalObjectType ObjectPointer::get_object_type() const
 	{
-		return VirtualTerminalObjectType::ExternalObjectPointer;
+		return VirtualTerminalObjectType::ObjectPointer;
 	}
 
-	std::uint32_t ObjectPointer::get_minumum_object_lenth() const
+	std::uint32_t ObjectPointer::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
@@ -2625,8 +2892,89 @@ namespace isobus
 		return true;
 	}
 
-	Macro::Macro(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool)
+	ExternalObjectPointer::ExternalObjectPointer(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable)
+	{
+	}
+
+	VirtualTerminalObjectType ExternalObjectPointer::get_object_type() const
+	{
+		return VirtualTerminalObjectType::ExternalObjectPointer;
+	}
+
+	std::uint32_t ExternalObjectPointer::get_minumum_object_length() const
+	{
+		return 9;
+	}
+
+	bool ExternalObjectPointer::get_is_valid() const
+	{
+		return true;
+	}
+
+	std::uint16_t ExternalObjectPointer::get_default_object_id() const
+	{
+		return defaultObjectID;
+	}
+
+	void ExternalObjectPointer::set_default_object_id(std::uint16_t id)
+	{
+		defaultObjectID = id;
+	}
+
+	std::uint16_t ExternalObjectPointer::get_external_reference_name_id() const
+	{
+		return externalReferenceNAMEID;
+	}
+
+	void ExternalObjectPointer::set_external_reference_name_id(std::uint16_t id)
+	{
+		externalReferenceNAMEID = id;
+	}
+
+	std::uint16_t ExternalObjectPointer::get_external_object_id() const
+	{
+		return externalObjectID;
+	}
+
+	void ExternalObjectPointer::set_external_object_id(std::uint16_t id)
+	{
+		externalObjectID = id;
+	}
+
+	const std::array<std::uint8_t, 28> Macro::ALLOWED_COMMANDS_LOOKUP_TABLE = {
+		static_cast<std::uint8_t>(Command::HideShowObject),
+		static_cast<std::uint8_t>(Command::EnableDisableObject),
+		static_cast<std::uint8_t>(Command::SelectInputObject),
+		static_cast<std::uint8_t>(Command::ControlAudioSignal),
+		static_cast<std::uint8_t>(Command::SetAudioVolume),
+		static_cast<std::uint8_t>(Command::ChangeChildLocation),
+		static_cast<std::uint8_t>(Command::ChangeSize),
+		static_cast<std::uint8_t>(Command::ChangeBackgroundColour),
+		static_cast<std::uint8_t>(Command::ChangeNumericValue),
+		static_cast<std::uint8_t>(Command::ChangeEndPoint),
+		static_cast<std::uint8_t>(Command::ChangeFontAttributes),
+		static_cast<std::uint8_t>(Command::ChangeLineAttributes),
+		static_cast<std::uint8_t>(Command::ChangeFillAttributes),
+		static_cast<std::uint8_t>(Command::ChangeActiveMask),
+		static_cast<std::uint8_t>(Command::ChangeSoftKeyMask),
+		static_cast<std::uint8_t>(Command::ChangeAttribute),
+		static_cast<std::uint8_t>(Command::ChangePriority),
+		static_cast<std::uint8_t>(Command::ChangeListItem),
+		static_cast<std::uint8_t>(Command::ChangeStringValue),
+		static_cast<std::uint8_t>(Command::ChangeChildPosition),
+		static_cast<std::uint8_t>(Command::ChangeObjectLabel),
+		static_cast<std::uint8_t>(Command::ChangePolygonPoint),
+		static_cast<std::uint8_t>(Command::LockUnlockMask),
+		static_cast<std::uint8_t>(Command::ExecuteMacro),
+		static_cast<std::uint8_t>(Command::ChangePolygonScale),
+		static_cast<std::uint8_t>(Command::GraphicsContextCommand),
+		static_cast<std::uint8_t>(Command::SelectColourMap),
+		static_cast<std::uint8_t>(Command::ExecuteExtendedMacro)
+	};
+
+	Macro::Macro(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable)
 	{
 	}
 
@@ -2635,18 +2983,88 @@ namespace isobus
 		return VirtualTerminalObjectType::Macro;
 	}
 
-	std::uint32_t Macro::get_minumum_object_lenth() const
+	std::uint32_t Macro::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
 
 	bool Macro::get_is_valid() const
 	{
-		return true;
+		bool retVal = true;
+
+		if (commandPackets.empty())
+		{
+			retVal = true;
+		}
+		else
+		{
+			for (const auto &command : commandPackets)
+			{
+				bool currentCommandAllowed = false;
+
+				for (const auto &allowedCommand : ALLOWED_COMMANDS_LOOKUP_TABLE)
+				{
+					if (command.at(0) == allowedCommand)
+					{
+						currentCommandAllowed = true;
+						break;
+					}
+				}
+
+				if (!currentCommandAllowed)
+				{
+					retVal = false;
+					break;
+				}
+			}
+		}
+		return retVal;
 	}
 
-	ColourMap::ColourMap(std::map<std::uint16_t, VTObject *> *parentObjectPool) :
-	  VTObject(parentObjectPool)
+	bool Macro::add_command_packet(std::array<std::uint8_t, CAN_DATA_LENGTH> command)
+	{
+		bool retVal = false;
+
+		if (commandPackets.size() < 255)
+		{
+			commandPackets.push_back(command);
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	std::uint8_t Macro::get_number_of_commands() const
+	{
+		return static_cast<std::uint8_t>(commandPackets.size());
+	}
+
+	bool Macro::get_command_packet(std::uint8_t index, std::array<std::uint8_t, CAN_DATA_LENGTH> &command)
+	{
+		bool retVal = false;
+
+		if (index < commandPackets.size())
+		{
+			std::copy(std::begin(commandPackets.at(index)), std::end(commandPackets.at(index)), std::begin(command));
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	bool Macro::remove_command_packet(std::uint8_t index)
+	{
+		bool retVal = false;
+
+		if (index < commandPackets.size())
+		{
+			auto eraseLocation = commandPackets.begin() + index;
+			commandPackets.erase(eraseLocation);
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	ColourMap::ColourMap(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable)
 	{
 	}
 
@@ -2655,7 +3073,7 @@ namespace isobus
 		return VirtualTerminalObjectType::ColourMap;
 	}
 
-	std::uint32_t ColourMap::get_minumum_object_lenth() const
+	std::uint32_t ColourMap::get_minumum_object_length() const
 	{
 		return MIN_OBJECT_LENGTH;
 	}
