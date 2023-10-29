@@ -8,8 +8,6 @@
 //================================================================================================
 #include "isobus/isobus/isobus_virtual_terminal_objects.hpp"
 
-#include <cassert>
-
 namespace isobus
 {
 	VTColourTable::VTColourTable()
@@ -3081,6 +3079,442 @@ namespace isobus
 	bool ColourMap::get_is_valid() const
 	{
 		return true;
+	}
+
+	WindowMask::WindowMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
+	  VTObject(memberObjectPool, currentColourTable)
+	{
+	}
+
+	VirtualTerminalObjectType WindowMask::get_object_type() const
+	{
+		return VirtualTerminalObjectType::WindowMask;
+	}
+
+	std::uint32_t WindowMask::get_minumum_object_length() const
+	{
+		return MIN_OBJECT_LENGTH;
+	}
+
+	bool WindowMask::get_is_valid() const
+	{
+		bool anyWrongChildType = false;
+
+		if (WindowType::Freeform != get_window_type())
+		{
+			if (NULL_OBJECT_ID != title)
+			{
+				auto titleObject = get_object_by_id(title);
+
+				if (nullptr != titleObject)
+				{
+					if ((VirtualTerminalObjectType::ObjectPointer != titleObject->get_object_type()) &&
+					    (VirtualTerminalObjectType::OutputString != titleObject->get_object_type()))
+					{
+						anyWrongChildType = true;
+					}
+					else if (VirtualTerminalObjectType::ObjectPointer == titleObject->get_object_type())
+					{
+						if (0 == titleObject->get_number_children())
+						{
+							anyWrongChildType = true;
+						}
+						else
+						{
+							std::uint16_t titleObjectPointedTo = std::static_pointer_cast<ObjectPointer>(titleObject)->get_child_id(0);
+							auto child = get_object_by_id(titleObjectPointedTo);
+
+							if ((nullptr != child) && (VirtualTerminalObjectType::OutputString == child->get_object_type()))
+							{
+								// Valid
+							}
+							else
+							{
+								anyWrongChildType = true;
+							}
+						}
+					}
+					else
+					{
+						// Valid
+					}
+				}
+				else
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+
+			if (NULL_OBJECT_ID != name)
+			{
+				auto nameObject = get_object_by_id(name);
+
+				if (nullptr != nameObject)
+				{
+					if ((VirtualTerminalObjectType::ObjectPointer != nameObject->get_object_type()) &&
+					    (VirtualTerminalObjectType::OutputString != nameObject->get_object_type()))
+					{
+						anyWrongChildType = true;
+					}
+					else if (VirtualTerminalObjectType::ObjectPointer == nameObject->get_object_type())
+					{
+						if (0 == nameObject->get_number_children())
+						{
+							anyWrongChildType = true;
+						}
+						else
+						{
+							std::uint16_t titleObjectPointedTo = std::static_pointer_cast<ObjectPointer>(nameObject)->get_child_id(0);
+							auto child = get_object_by_id(titleObjectPointedTo);
+
+							if ((nullptr != child) && (VirtualTerminalObjectType::OutputString == child->get_object_type()))
+							{
+								// Valid
+							}
+							else
+							{
+								anyWrongChildType = true;
+							}
+						}
+					}
+					else
+					{
+						// Valid
+					}
+				}
+				else
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+
+			if (NULL_OBJECT_ID != icon)
+			{
+				auto nameObject = get_object_by_id(icon);
+
+				if (nullptr != nameObject)
+				{
+					switch (nameObject->get_object_type())
+					{
+						case VirtualTerminalObjectType::OutputString:
+						case VirtualTerminalObjectType::Container:
+						case VirtualTerminalObjectType::OutputNumber:
+						case VirtualTerminalObjectType::OutputList:
+						case VirtualTerminalObjectType::OutputLine:
+						case VirtualTerminalObjectType::OutputRectangle:
+						case VirtualTerminalObjectType::OutputEllipse:
+						case VirtualTerminalObjectType::OutputPolygon:
+						case VirtualTerminalObjectType::OutputMeter:
+						case VirtualTerminalObjectType::OutputLinearBarGraph:
+						case VirtualTerminalObjectType::OutputArchedBarGraph:
+						case VirtualTerminalObjectType::GraphicsContext:
+						case VirtualTerminalObjectType::PictureGraphic:
+						case VirtualTerminalObjectType::ObjectPointer:
+						case VirtualTerminalObjectType::ScaledGraphic:
+						{
+							// Valid
+						}
+						break;
+
+						default:
+						{
+							anyWrongChildType = true;
+						}
+						break;
+					}
+				}
+				else
+				{
+					anyWrongChildType = true;
+				}
+			}
+			else
+			{
+				anyWrongChildType = true;
+			}
+		}
+		else if (NULL_OBJECT_ID != title)
+		{
+			anyWrongChildType = true;
+		}
+
+		// Validate the actual child object references for each window type
+		switch (static_cast<WindowType>(windowType))
+		{
+			case WindowType::Freeform:
+			{
+			}
+			break;
+
+			case WindowType::NumericOutputValueWithUnits1x1:
+			case WindowType::NumericOutputValueWithUnits2x1:
+			{
+				if (2 == get_number_children())
+				{
+					auto outputNum = get_object_by_id(get_child_id(0));
+					auto outputString = get_object_by_id(get_child_id(0));
+
+					if ((nullptr == outputNum) ||
+					    (nullptr == outputString) ||
+					    (VirtualTerminalObjectType::OutputNumber != outputNum->get_object_type()) ||
+					    (VirtualTerminalObjectType::OutputString != outputString->get_object_type()))
+					{
+						anyWrongChildType = true;
+					}
+				}
+				else
+				{
+					anyWrongChildType = true;
+				}
+			}
+			break;
+
+			case WindowType::NumericOutputValueNoUnits1x1:
+			case WindowType::NumericOutputValueNoUnits2x1:
+			{
+				if (1 == get_number_children())
+				{
+					auto outputNum = get_object_by_id(get_child_id(0));
+
+					if ((nullptr == outputNum) ||
+					    (VirtualTerminalObjectType::OutputNumber != outputNum->get_object_type()))
+					{
+						anyWrongChildType = true;
+					}
+				}
+				else
+				{
+					anyWrongChildType = true;
+				}
+			}
+			break;
+
+			case WindowType::StringOutputValue1x1:
+			case WindowType::StringOutputValue2x1:
+			{
+				if (1 == get_number_children())
+				{
+					auto outputString = get_object_by_id(get_child_id(0));
+
+					if ((nullptr == outputString) ||
+					    (VirtualTerminalObjectType::OutputString != outputString->get_object_type()))
+					{
+						anyWrongChildType = true;
+					}
+				}
+				else
+				{
+					anyWrongChildType = true;
+				}
+			}
+			break;
+
+			case WindowType::NumericInputValueWithUnits1x1:
+			case WindowType::NumericInputValueWithUnits2x1:
+			{
+				if (2 == get_number_children())
+				{
+					auto inputNum = get_object_by_id(get_child_id(0));
+					auto outputString = get_object_by_id(get_child_id(0));
+
+					if ((nullptr == inputNum) ||
+					    (nullptr == outputString) ||
+					    (VirtualTerminalObjectType::InputNumber != inputNum->get_object_type()) ||
+					    (VirtualTerminalObjectType::OutputString != outputString->get_object_type()))
+					{
+						anyWrongChildType = true;
+					}
+				}
+				else
+				{
+					anyWrongChildType = true;
+				}
+			}
+			break;
+
+			case WindowType::NumericInputValueNoUnits1x1:
+			case WindowType::NumericInputValueNoUnits2x1:
+			{
+				if (1 == get_number_children())
+				{
+					auto inputNum = get_object_by_id(get_child_id(0));
+
+					if ((nullptr == inputNum) ||
+					    (VirtualTerminalObjectType::InputNumber != inputNum->get_object_type()))
+					{
+						anyWrongChildType = true;
+					}
+				}
+				else
+				{
+					anyWrongChildType = true;
+				}
+			}
+			break;
+
+			case WindowType::StringInputValue1x1:
+			case WindowType::StringInputValue2x1:
+			{
+				if (1 == get_number_children())
+				{
+					auto inputStr = get_object_by_id(get_child_id(0));
+
+					if ((nullptr == inputStr) ||
+					    (VirtualTerminalObjectType::InputString != inputStr->get_object_type()))
+					{
+						anyWrongChildType = true;
+					}
+				}
+				else
+				{
+					anyWrongChildType = true;
+				}
+			}
+			break;
+
+			case WindowType::HorizontalLinearBarGraphNoUnits1x1:
+			case WindowType::HorizontalLinearBarGraphNoUnits2x1:
+			{
+				if (1 == get_number_children())
+				{
+					auto outputBargraph = get_object_by_id(get_child_id(0));
+
+					if ((nullptr == outputBargraph) ||
+					    (VirtualTerminalObjectType::OutputLinearBarGraph != outputBargraph->get_object_type()))
+					{
+						anyWrongChildType = true;
+					}
+				}
+				else
+				{
+					anyWrongChildType = true;
+				}
+			}
+			break;
+
+			case WindowType::SingleButton1x1:
+			case WindowType::SingleButton2x1:
+			{
+				if (1 == get_number_children())
+				{
+					auto button = get_object_by_id(get_child_id(0));
+
+					if ((nullptr == button) ||
+					    (VirtualTerminalObjectType::Button != button->get_object_type()))
+					{
+						anyWrongChildType = true;
+					}
+				}
+				else
+				{
+					anyWrongChildType = true;
+				}
+			}
+			break;
+
+			case WindowType::DoubleButton1x1:
+			case WindowType::DoubleButton2x1:
+			{
+				if (2 == get_number_children())
+				{
+					auto button1 = get_object_by_id(get_child_id(0));
+					auto button2 = get_object_by_id(get_child_id(0));
+
+					if ((nullptr == button1) ||
+					    (nullptr == button2) ||
+					    (VirtualTerminalObjectType::Button != button1->get_object_type()) ||
+					    (VirtualTerminalObjectType::Button != button2->get_object_type()))
+					{
+						anyWrongChildType = true;
+					}
+				}
+				else
+				{
+					anyWrongChildType = true;
+				}
+			}
+			break;
+
+			default:
+			{
+				anyWrongChildType = true;
+			}
+			break;
+		}
+		return !anyWrongChildType;
+	}
+
+	std::uint16_t WindowMask::get_name_object_id() const
+	{
+		return name;
+	}
+
+	void WindowMask::set_name_object_id(std::uint16_t object)
+	{
+		name = object;
+	}
+
+	std::uint16_t WindowMask::get_title_object_id() const
+	{
+		return title;
+	}
+
+	void WindowMask::set_title_object_id(std::uint16_t object)
+	{
+		title = object;
+	}
+
+	std::uint16_t WindowMask::get_icon_object_id() const
+	{
+		return icon;
+	}
+
+	void WindowMask::set_icon_object_id(std::uint16_t object)
+	{
+		icon = object;
+	}
+
+	WindowMask::WindowType WindowMask::get_window_type() const
+	{
+		return static_cast<WindowType>(windowType);
+	}
+
+	void WindowMask::set_window_type(WindowType type)
+	{
+		if (static_cast<std::uint8_t>(type) <= static_cast<std::uint8_t>(WindowType::DoubleButton2x1))
+		{
+			windowType = static_cast<std::uint8_t>(type);
+		}
+	}
+
+	bool WindowMask::get_option(Options option) const
+	{
+		return (0 != ((1 << static_cast<std::uint8_t>(option)) & optionsBitfield));
+	}
+
+	void WindowMask::set_options(std::uint8_t value)
+	{
+		optionsBitfield = value;
+	}
+
+	void WindowMask::set_option(Options option, bool value)
+	{
+		if (value)
+		{
+			optionsBitfield |= (1 << static_cast<std::uint8_t>(option));
+		}
+		else
+		{
+			optionsBitfield &= ~(1 << static_cast<std::uint8_t>(option));
+		}
 	}
 
 } // namespace isobus

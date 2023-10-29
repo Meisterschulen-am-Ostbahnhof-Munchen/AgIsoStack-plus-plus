@@ -49,6 +49,8 @@ namespace isobus
 		GraphicsContext = 36, ///< Used to output a graphics context.
 		Animation = 44, ///< The Animation object is used to display simple animations
 		PictureGraphic = 20, ///< Used to output a picture graphic (bitmap).
+		GraphicData = 46, ///< Used to define the data for a graphic image
+		ScaledGraphic = 48, ///< Used to display a scaled representation of a graphic object
 		NumberVariable = 21, ///< Used to store a 32-bit unsigned integer value.
 		StringVariable = 22, ///< Used to store a fixed length string value.
 		FontAttributes = 23, ///< Used to group font based attributes. Can only be referenced by other objects.
@@ -2548,6 +2550,118 @@ namespace isobus
 
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 5; ///< The fewest bytes of IOP data that can represent this object
+	};
+
+	/// @brief Defines a window mask object
+	class WindowMask : public VTObject
+	{
+	public:
+		/// @brief Enumerates the different kinds of window masks which imply how they are displayed and what they contain
+		enum class WindowType : std::uint8_t
+		{
+			Freeform = 0, ///< the Working Set supplies and positions all child objects contained inside the window. In this case the Working Set has complete control over the look and feel of the window.
+			NumericOutputValueWithUnits1x1 = 1, ///< This window displays a single numeric output with units of measure in a single window cell.
+			NumericOutputValueNoUnits1x1 = 2, ///< This window displays a single numeric output with no units of measure in a single window cell.
+			StringOutputValue1x1 = 3, ///< This window displays a single string output in a single window cell.
+			NumericInputValueWithUnits1x1 = 4, ///< This window displays a single numeric input with units of measure in a single window cell
+			NumericInputValueNoUnits1x1 = 5, ///< This window displays a single numeric input with no units of measure in a single window cell
+			StringInputValue1x1 = 6, ///< This window displays a single string input in a single window cell
+			HorizontalLinearBarGraphNoUnits1x1 = 7, ///< This window displays a single horizontal linear bar graph in a single window cell
+			SingleButton1x1 = 8, ///< This window displays a single Button object in a single window cell
+			DoubleButton1x1 = 9, ///< This window displays two Button objects in a single window cell
+			NumericOutputValueWithUnits2x1 = 10, ///< This window displays a single numeric output with units of measure in two horizontal window cells
+			NumericOutputValueNoUnits2x1 = 11, ///< This window displays a single numeric output with no units of measure in two horizontal window cells
+			StringOutputValue2x1 = 12, ///< This window displays a single string output in two horizontal window cells.
+			NumericInputValueWithUnits2x1 = 13, ///< This window displays a single numeric input with units of measure in two horizontal window cells
+			NumericInputValueNoUnits2x1 = 14, ///< This window displays a single numeric input with no units of measure in two horizontal window cells
+			StringInputValue2x1 = 15, ///< This window displays a single string input in two horizontal window cells.
+			HorizontalLinearBarGraphNoUnits2x1 = 16, ///< This window displays a single horizontal linear bar graph in two horizontal window cells
+			SingleButton2x1 = 17, ///< This window displays a single Button object in two horizontal window cells
+			DoubleButton2x1 = 18 ///< This window displays two Button objects in two horizontal window cells
+		};
+
+		/// @brief Enumerates the bit indexes of options encoded in the object's options bitfield
+		enum class Options
+		{
+			Available = 0, ///< If 0 (FALSE) this window is not available for use at the present time, even though defined.
+			Transparent = 1 ///< Transparent. If this bit is 1, the background colour attribute shall not be used and the Window shall be transparent.
+		};
+
+		/// @brief Constructor for a window mask object
+		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		WindowMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
+
+		/// @brief Returns the VT object type of the underlying derived object
+		/// @returns The VT object type of the underlying derived object
+		VirtualTerminalObjectType get_object_type() const override;
+
+		/// @brief Returns the minimum binary serialized length of the associated object
+		/// @returns The minimum binary serialized length of the associated object
+		std::uint32_t get_minumum_object_length() const override;
+
+		/// @brief Performs basic error checking on the object and returns if the object is valid
+		/// @returns `true` if the object passed basic error checks
+		bool get_is_valid() const override;
+
+		/// @brief Returns object ID of an Output String object or an Object Pointer object that points
+		/// to an Output String object that contains the string that gives a proper name to this object
+		/// @returns Object ID corresponding to this object's proper name
+		std::uint16_t get_name_object_id() const;
+
+		/// @brief Sets the object ID of an Output String object or an Object Pointer object that points
+		/// to an Output String object that contains the string that gives a proper name to this object
+		/// @param[in] object The object ID that contains the string for this object's proper name
+		void set_name_object_id(std::uint16_t object);
+
+		/// @brief Returns Object ID of an Output String object or an Object Pointer
+		/// object that points to an Output String object that
+		/// contains the string that supplies window title text
+		/// @returns Object ID corresponding to this object's window title text
+		std::uint16_t get_title_object_id() const;
+
+		/// @brief Sets the Object ID of an Output String object or an Object Pointer
+		/// object that points to an Output String object that
+		/// contains the string that supplies window title text
+		/// @param[in] object The object ID that contains the string for this object's title text
+		void set_title_object_id(std::uint16_t object);
+
+		/// @brief Returns the object ID of an output object that contains an icon for the window.
+		/// @returns The object ID of an output object that contains an icon for the window.
+		std::uint16_t get_icon_object_id() const;
+
+		/// @brief Sets the object ID of an output object that contains an icon for the window.
+		/// @param[in] object The object ID of an output object that contains an icon for the window.
+		void set_icon_object_id(std::uint16_t object);
+
+		/// @brief Returns the window type for this object
+		/// @returns The window type for this object
+		WindowType get_window_type() const;
+
+		/// @brief Sets the window type for this object
+		/// @param[in] type The window type for this object
+		void set_window_type(WindowType type);
+
+		/// @brief Returns the state of a single option in the object's option bitfield
+		/// @param[in] option The option to check the value of in the object's option bitfield
+		/// @returns The state of the associated option bit
+		bool get_option(Options option) const;
+
+		/// @brief Sets the options bitfield for this object to a new value
+		/// @param[in] value The new value for the options bitfield
+		void set_options(std::uint8_t value);
+
+		/// @brief Sets a single option in the options bitfield to the specified value
+		/// @param[in] option The option to set
+		/// @param[in] value The new value of the option bit
+		void set_option(Options option, bool value);
+
+	private:
+		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 17; ///< The fewest bytes of IOP data that can represent this object
+		std::uint16_t name = NULL_OBJECT_ID; ///< Object ID of an Output String object or an Object Pointer object that points to an Output String object that contains the string that gives a proper name to this object
+		std::uint16_t title = NULL_OBJECT_ID; ///< Object ID of an Output String object or an Object Pointer object that points to an Output String object that supplies window title text
+		std::uint16_t icon = NULL_OBJECT_ID; ///< Object ID of an Output object or an Object Pointer object that points to an Output object that contains an icon for the window
+		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
+		std::uint8_t windowType = 0; ///< The window type, which implies its size
 	};
 
 } // namespace isobus
