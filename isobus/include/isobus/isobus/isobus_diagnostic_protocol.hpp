@@ -221,6 +221,7 @@ namespace isobus
 		~DiagnosticProtocol();
 
 		/// @brief The protocol's initializer function
+		/// @returns true if the protocol was initialized, otherwise false
 		bool initialize();
 
 		/// @brief Returns if the protocol has been initialized

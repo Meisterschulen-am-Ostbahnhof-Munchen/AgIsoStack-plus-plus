@@ -17,6 +17,7 @@
 #include "isobus/isobus/can_partnered_control_function.hpp"
 #include "isobus/isobus/can_protocol.hpp"
 #include "isobus/isobus/can_stack_logger.hpp"
+#include "isobus/isobus/can_transport_message.hpp"
 #include "isobus/utility/system_timing.hpp"
 #include "isobus/utility/to_string.hpp"
 
@@ -132,8 +133,28 @@ namespace isobus
 		    ((parameterGroupNumber == static_cast<std::uint32_t>(CANLibParameterGroupNumber::AddressClaim)) ||
 		     (sourceControlFunction->get_address_valid())))
 		{
-			CANLibProtocol *currentProtocol;
+			std::unique_ptr<CANTransportData> data;
+			if (nullptr != frameChunkCallback)
+			{
+				//! @todo use the frameChunkCallback to send the message
+			}
+			else
+			{
+				data = std::make_unique<CANTransportDataView>(const_cast<std::uint8_t *>(dataBuffer), static_cast<size_t>(dataLength));
+			}
 
+			if (transportProtocol.protocol_transmit_message(parameterGroupNumber,
+			                                                std::move(data),
+			                                                sourceControlFunction,
+			                                                destinationControlFunction,
+			                                                transmitCompleteCallback,
+			                                                parentPointer))
+			{
+				// Successfully sent via the transport protocol
+			}
+
+			//! @todo convert the other protocols to stop using the abstract protocollib class
+			CANLibProtocol *currentProtocol;
 			// See if any transport layer protocol can handle this message
 			for (std::uint32_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
 			{
@@ -436,7 +457,8 @@ namespace isobus
 		return retVal;
 	}
 
-	CANNetworkManager::CANNetworkManager()
+	CANNetworkManager::CANNetworkManager() :
+	  transportProtocol({})
 	{
 		currentBusloadBitAccumulator.fill(0);
 		lastAddressClaimRequestTimestamp_ms.fill(0);

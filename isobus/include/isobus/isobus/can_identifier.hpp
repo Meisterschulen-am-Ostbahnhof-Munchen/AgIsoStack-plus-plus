@@ -59,16 +59,8 @@ namespace isobus
 		              std::uint8_t destinationAddress,
 		              std::uint8_t sourceAddress);
 
-		/// @brief Copy constructor for a CAN Identifier
-		/// @param[in] copiedObject The object to copy
-		CANIdentifier(const CANIdentifier &copiedObject);
-
 		/// @brief Destructor for the CANIdentifier
-		~CANIdentifier();
-
-		/// @brief Assignment operator for a CAN identifier
-		/// @param[in] obj rhs of the operator
-		CANIdentifier &operator=(const CANIdentifier &obj);
+		~CANIdentifier() = default;
 
 		/// @brief Returns the raw encoded ID of the CAN identifier
 		/// @returns The raw encoded ID of the CAN identifier
