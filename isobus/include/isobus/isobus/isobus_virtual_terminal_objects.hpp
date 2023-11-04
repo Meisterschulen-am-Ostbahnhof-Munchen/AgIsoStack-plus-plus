@@ -742,6 +742,16 @@ namespace isobus
 		/// @param[in] value The justification bitfield to set
 		void set_justification_bitfield(std::uint8_t value);
 
+		/// @brief Returns a copy of the stored string value. Used only when no string
+		/// variable objects are children of this object.
+		/// @returns The value of the string stored in this object
+		std::string get_value() const;
+
+		/// @brief Changes the stored string value. Use only when no
+		/// string variable objects are children of this object.
+		/// @param[in] value The new string value
+		void set_value(const std::string &value);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 19; ///< The fewest bytes of IOP data that can represent this object
 

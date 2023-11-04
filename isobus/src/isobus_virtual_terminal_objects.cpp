@@ -994,6 +994,16 @@ namespace isobus
 		justificationBitfield = value;
 	}
 
+	std::string InputString::get_value() const
+	{
+		return stringValue;
+	}
+
+	void InputString::set_value(const std::string &value)
+	{
+		stringValue = value;
+	}
+
 	InputNumber::InputNumber(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
 	  VTObject(memberObjectPool, currentColourTable),
 	  scale(0.0f),
