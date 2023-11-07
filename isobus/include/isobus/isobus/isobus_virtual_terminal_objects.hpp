@@ -121,6 +121,15 @@ namespace isobus
 	class VTObject
 	{
 	public:
+		/// @brief Enumerates the bit indices of the error fields that can be set when changing an attribute
+		enum class AttributeError : std::uint8_t
+		{
+			InvalidObjectID = 0,
+			InvalidAttributeID = 1,
+			InvalidValue = 2,
+			AnyOtherError = 4
+		};
+
 		/// @brief Constructor for a generic VT object. Sets up default values and the pointer to the member object pool
 		/// @param[in] memberObjectPool a pointer to the object tree that this object will be a member of
 		VTObject(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -136,6 +145,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		virtual bool get_is_valid() const = 0;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		virtual bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) = 0;
 
 		/// @brief Returns the object ID of this VT object
 		/// @returns The object ID of this VT object
@@ -244,6 +262,13 @@ namespace isobus
 			std::int16_t yLocation; ///< Relative Y location of the top left corner of the object
 		};
 
+		/// @brief A helper function to swap a child object of specified type with a new object.
+		/// This is meant to be used to replace attributes of which there can be only 1, such as a string variable in an output string.
+		/// @param[in] newID The new child object's ID
+		/// @param[in] typeToRemove The object type of both the current child, and the new child (they must match)
+		/// @returns True if the replacement succeeded, otherwise false
+		bool replace_only_child_of_type(std::uint16_t newID, VirtualTerminalObjectType typeToRemove);
+
 		VTColourTable &colourTable; ///< A reference to the current object pool's colour table. Useful for rendering most objects.
 		std::map<std::uint16_t, std::shared_ptr<VTObject>> &thisObjectPool; ///< A pointer to the rest of the object pool. Convenient for lookups by object ID.
 		std::vector<ChildObjectData> children; ///< List of child objects
@@ -258,6 +283,18 @@ namespace isobus
 	class WorkingSet : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			BackgroundColour = 1,
+			Selectable = 2,
+			ActiveMask = 3,
+
+			NumberOfAttributes = 4
+		};
+
 		/// @brief Constructor for a working set object
 		/// @param[in] parentObjectPool A pointer to the object pool this object is a member of
 		WorkingSet(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -273,6 +310,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns if the working set is currently selectable
 		/// @returns `true` if the working set is currently selectable, otherwise false
@@ -302,6 +348,17 @@ namespace isobus
 	class DataMask : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			BackgroundColour = 1,
+			SoftKeyMask = 2,
+
+			NumberOfAttributes = 3
+		};
+
 		/// @brief Constructor for a data mask object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		DataMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -318,6 +375,15 @@ namespace isobus
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
 
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 12; ///< The fewest bytes of IOP data that can represent this object
 	};
@@ -326,6 +392,19 @@ namespace isobus
 	class AlarmMask : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			BackgroundColour = 1,
+			SoftKeyMask = 2,
+			Priority = 3,
+			AcousticSignal = 4,
+
+			NumberOfAttributes = 5
+		};
+
 		/// @brief Enumerates the different mask priorities. Higher priority masks will be shown over lower priority ones across all working sets.
 		enum class Priority : std::uint8_t
 		{
@@ -359,6 +438,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the priority of the alarm mask
 		/// @details Higher priority masks will be shown over lower priority ones.
@@ -394,6 +482,18 @@ namespace isobus
 	class Container : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Width = 1,
+			Height = 2,
+			Hidden = 3,
+
+			NumberOfAttributes = 4
+		};
+
 		/// @brief Constructor for a container object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		Container(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -409,6 +509,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the "hidden" attribute for this container
 		/// @returns true if the hidden attribute is set, otherwise `false`
@@ -431,6 +540,16 @@ namespace isobus
 	class SoftKeyMask : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			BackgroundColour = 1,
+
+			NumberOfAttributes = 2
+		};
+
 		/// @brief Constructor for a soft key mask object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		SoftKeyMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -447,6 +566,15 @@ namespace isobus
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
 
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 6; ///< The fewest bytes of IOP data that can represent this object
 	};
@@ -456,6 +584,17 @@ namespace isobus
 	class Key : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			BackgroundColour = 1,
+			KeyCode = 2,
+
+			NumberOfAttributes = 3
+		};
+
 		/// @brief Constructor for a key object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		Key(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -471,6 +610,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the key code associated to this key object
 		/// @returns The key code associated to this key object
@@ -490,6 +638,17 @@ namespace isobus
 	class KeyGroup : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Options = 1,
+			Name = 2,
+
+			NumberOfAttributes = 3
+		};
+
 		/// @brief Enumerates the options bits in the options bitfield of a KeyGroup
 		enum class Options : std::uint8_t
 		{
@@ -512,6 +671,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the key group icon that represents this key group
 		/// @returns Object ID of the key group icon that represents this key group
@@ -550,6 +718,21 @@ namespace isobus
 	class Button : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Width = 1,
+			Height = 2,
+			BackgroundColour = 3,
+			BorderColour = 4,
+			KeyCode = 5,
+			Options = 6, // Version 4 and later
+
+			NumberOfAttributes = 7
+		};
+
 		/// @brief Enumerates the options encoded into the options bitfield for a button
 		enum class Options : std::uint8_t
 		{
@@ -578,6 +761,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the key code associated with this button's events
 		/// @returns The key code associated with this button's events
@@ -621,6 +813,21 @@ namespace isobus
 	class InputBoolean : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			BackgroundColour = 1,
+			Width = 2,
+			ForegroundColour = 3,
+			VariableReference = 4,
+			Value = 5,
+			Enabled = 6, // Version 4 and later
+
+			NumberOfAttributes = 7
+		};
+
 		/// @brief Constructor for an input boolean object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		InputBoolean(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -636,6 +843,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the value of the boolean (only matters if a reference object is not present)
 		/// @note The reference object will be a child number variable object if it is present
@@ -666,6 +882,24 @@ namespace isobus
 	class InputString : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Width = 1,
+			Height = 2,
+			BackgroundColour = 3,
+			FontAttributes = 4,
+			InputAttributes = 5,
+			Options = 6,
+			VariableReference = 7,
+			Justification = 8,
+			Enabled = 9, // Version 4 and later
+
+			NumberOfAttributes = 10
+		};
+
 		/// @brief Options that can be applied to the input string
 		enum class Options : std::uint8_t
 		{
@@ -707,6 +941,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns if the input string is enabled for text entry
 		/// @returns `true` if the input string is enabled for entry
@@ -767,6 +1010,30 @@ namespace isobus
 	class InputNumber : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Width = 1,
+			Height = 2,
+			BackgroundColour = 3,
+			FontAttributes = 4,
+			Options = 5,
+			VariableReference = 6,
+			MinValue = 7,
+			MaxValue = 8,
+			Offset = 9,
+			Scale = 10,
+			NumberOfDecimals = 11,
+			Format = 12,
+			Justification = 13,
+			Value = 14,
+			Options2 = 15, // Version 4 and after
+
+			NumberOfAttributes = 16
+		};
+
 		/// @brief Options that can be applied to the input number
 		enum class Options : std::uint8_t
 		{
@@ -816,6 +1083,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the horizontal justification setting of the input number
 		/// @returns The horizontal justification setting of the input number
@@ -941,6 +1217,20 @@ namespace isobus
 	class InputList : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Width = 1,
+			Height = 2,
+			VariableReference = 3,
+			Value = 4,
+			Options = 5, // Version 4 and after
+
+			NumberOfAttributes = 6
+		};
+
 		/// @brief Enumerates the bits in the options bitfield for an InputList
 		enum class Options
 		{
@@ -963,6 +1253,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the state of a single option in the object's option bitfield
 		/// @param[in] option The option to check the value of in the object's option bitfield
@@ -998,6 +1297,22 @@ namespace isobus
 	class OutputString : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Width = 1,
+			Height = 2,
+			BackgroundColour = 3,
+			FontAttributes = 4,
+			Options = 5,
+			VariableReference = 6,
+			Justification = 7,
+
+			NumberOfAttributes = 8
+		};
+
 		/// @brief Enumerates the option bits in the options bitfield for an output string
 		enum class Options
 		{
@@ -1039,6 +1354,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the state of a single option in the object's option bitfield
 		/// @param[in] option The option to check the value of in the object's option bitfield
@@ -1087,6 +1411,26 @@ namespace isobus
 	class OutputNumber : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Width = 1,
+			Height = 2,
+			BackgroundColour = 3,
+			FontAttributes = 4,
+			Options = 5,
+			VariableReference = 6,
+			Offset = 7,
+			Scale = 8,
+			NumberOfDecimals = 9,
+			Format = 10,
+			Justification = 11,
+
+			NumberOfAttributes = 12
+		};
+
 		/// @brief Options that can be applied to the input number
 		enum class Options : std::uint8_t
 		{
@@ -1129,6 +1473,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the state of a single option in the object's option bitfield
 		/// @param[in] option The option to check the value of in the object's option bitfield
@@ -1216,6 +1569,19 @@ namespace isobus
 	class OutputList : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Width = 1,
+			Height = 2,
+			VariableReference = 3,
+			Value = 4,
+
+			NumberOfAttributes = 5
+		};
+
 		/// @brief Constructor for an output list object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		OutputList(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -1231,6 +1597,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the number of items in the list
 		/// @returns The number of items in the list
@@ -1255,6 +1630,19 @@ namespace isobus
 	class OutputLine : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			LineAttributes = 1,
+			Width = 2,
+			Height = 3,
+			LineDirection = 4,
+
+			NumberOfAttributes = 5
+		};
+
 		/// @brief Enumerates the different directions a line can be drawn
 		enum class LineDirection : std::uint8_t
 		{
@@ -1277,6 +1665,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the line's direction.
 		/// @details When the line direction is zero, the ine is drawn from top left to bottom right of
@@ -1302,6 +1699,19 @@ namespace isobus
 	class OutputRectangle : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			LineAttributes = 1,
+			Width = 2,
+			Height = 3,
+			LineSuppression = 4,
+			FillAttributes = 5,
+
+			NumberOfAttributes = 6
+		};
 		/// @brief The different line suppression options
 		enum class LineSuppressionOption
 		{
@@ -1327,6 +1737,15 @@ namespace isobus
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
 
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+
 		/// @brief Returns the line suppression bitfield.
 		/// @note See LineSuppressionOption for the bit definitions.
 		/// @returns The line suppression bitfield (see LineSuppressionOption).
@@ -1347,6 +1766,22 @@ namespace isobus
 	class OutputEllipse : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			LineAttributes = 1,
+			Width = 2,
+			Height = 3,
+			EllipseType = 4,
+			StartAngle = 5,
+			EndAngle = 6,
+			FillAttributes = 7,
+
+			NumberOfAttributes = 8
+		};
+
 		/// @brief Types of ellipse
 		enum class EllipseType
 		{
@@ -1371,6 +1806,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the type of the ellipse
 		/// @returns The type of the ellipse
@@ -1415,6 +1859,20 @@ namespace isobus
 	class OutputPolygon : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Width = 1,
+			Height = 2,
+			LineAttributes = 3,
+			FillAttributes = 4,
+			PolygonType = 5,
+
+			NumberOfAttributes = 6
+		};
+
 		/// @brief Polygon type. The first three types are useful only if the polygon is to be filled.
 		enum class PolygonType
 		{
@@ -1446,6 +1904,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Adds a point to the polygon, defined by x and y coordinates
 		/// @param[in] x The X value of a point relative to the top left corner	of the polygon
@@ -1480,6 +1947,27 @@ namespace isobus
 	class OutputMeter : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Width = 1,
+			NeedleColour = 2,
+			BorderColour = 3,
+			ArcAndTickColour = 4,
+			Options = 5,
+			NumberOfTicks = 6,
+			StartAngle = 7,
+			EndAngle = 8,
+			MinValue = 9,
+			MaxValue = 10,
+			VariableReference = 11,
+			Value = 12,
+
+			NumberOfAttributes = 13
+		};
+
 		/// @brief Options that can be applied to the input number
 		enum class Options : std::uint8_t
 		{
@@ -1505,13 +1993,22 @@ namespace isobus
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
 
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+
 		/// @brief Returns the minimum value of the output meter
 		/// @returns The minimum value of the output meter
 		std::uint16_t get_min_value() const;
 
 		/// @brief Sets the minimum value of the output meter
 		/// @param[in] value The minimum value to set for the output meter
-		void set_min_value(std::uint8_t value);
+		void set_min_value(std::uint16_t value);
 
 		/// @brief Returns the max value for the output meter
 		/// @returns The max value for the output meter
@@ -1519,7 +2016,7 @@ namespace isobus
 
 		/// @brief Sets the max value for the output meter
 		/// @param[in] value The max value to set for the output meter
-		void set_max_value(std::uint8_t value);
+		void set_max_value(std::uint16_t value);
 
 		/// @brief Returns the value for the output meter (only matters if there's no child number variable object).
 		/// @returns The value of the output meter
@@ -1527,7 +2024,7 @@ namespace isobus
 
 		/// @brief Sets the value of the output meter (only matters if there's no child number variable object).
 		/// @param[in] value The value to set for the output meter
-		void set_value(std::uint8_t value);
+		void set_value(std::uint16_t value);
 
 		/// @brief Returns the value of the needle colour
 		/// @returns The value of the needle colour as an index into the VT colour table
@@ -1614,6 +2111,27 @@ namespace isobus
 	class OutputLinearBarGraph : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Width = 1,
+			Height = 2,
+			Colour = 3,
+			TargetLineColour = 4,
+			Options = 5,
+			NumberOfTicks = 6,
+			MinValue = 7,
+			MaxValue = 8,
+			VariableReference = 9,
+			TargetValueVariableReference = 10,
+			TargetValue = 11,
+			Value = 12,
+
+			NumberOfAttributes = 13
+		};
+
 		/// @brief Options that can be applied to the input number
 		enum class Options : std::uint8_t
 		{
@@ -1640,6 +2158,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the minimum value on the graph. Used to scale the graph's range.
 		/// @returns The minimum value that will be shown on the graph.
@@ -1743,6 +2270,28 @@ namespace isobus
 	class OutputArchedBarGraph : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Width = 1,
+			Height = 2,
+			Colour = 3,
+			TargetLineColour = 4,
+			Options = 5,
+			StartAngle = 6,
+			EndAngle = 7,
+			BarGraphWidth = 8,
+			MinValue = 9,
+			MaxValue = 10,
+			VariableReference = 11,
+			TargetValueVariableReference = 12,
+			TargetValue = 13,
+
+			NumberOfAttributes = 14
+		};
+
 		/// @brief Options that can be applied to the input number
 		enum class Options : std::uint8_t
 		{
@@ -1768,6 +2317,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the width (px) of the bar graph
 		/// @returns The width (px) of the bar graph
@@ -1891,6 +2449,21 @@ namespace isobus
 	class PictureGraphic : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Width = 1,
+			Options = 2,
+			TransparencyColour = 3,
+			ActualWidth = 4,
+			ActualHeight = 5,
+			Format = 6,
+
+			NumberOfAttributes = 7
+		};
+
 		/// @brief Enumerates the different colour formats a picture graphic can have (mutually exclusive)
 		enum class Format
 		{
@@ -1922,6 +2495,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns a reference to the underlying bitmap data
 		/// @returns A reference to the underlying bitmap data
@@ -2006,6 +2588,16 @@ namespace isobus
 	class NumberVariable : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Value = 1,
+
+			NumberOfAttributes = 2
+		};
+
 		/// @brief Constructor for a number variable object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		NumberVariable(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -2021,6 +2613,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the number variable's value
 		/// @returns The number variable's value
@@ -2040,6 +2641,15 @@ namespace isobus
 	class StringVariable : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+
+			NumberOfAttributes = 1
+		};
+
 		/// @brief Constructor for a string variable object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		StringVariable(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -2055,6 +2665,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the actual string value stored in this object
 		/// @returns The string value stored in this object
@@ -2074,6 +2693,19 @@ namespace isobus
 	class FontAttributes : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			FontColour = 1,
+			FontSize = 2,
+			FontType = 3,
+			FontStyle = 4,
+
+			NumberOfAttributes = 5
+		};
+
 		/// @brief Enumerates the different font sizes
 		enum class FontSize : std::uint8_t
 		{
@@ -2139,6 +2771,15 @@ namespace isobus
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
 
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+
 		/// @brief Returns the font type associated to this font attributes object
 		/// @returns The font type associated to this font attributes object
 		FontType get_type() const;
@@ -2202,6 +2843,18 @@ namespace isobus
 	class LineAttributes : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			LineColour = 1,
+			LineWidth = 2,
+			LineArt = 3,
+
+			NumberOfAttributes = 4
+		};
+
 		/// @brief Constructor for a line attributes object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		LineAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -2217,6 +2870,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Sets the line art bit pattern. Each bit represents 1 pixel's on/off state.
 		/// @returns The line attribute's line art bit pattern
@@ -2236,6 +2898,18 @@ namespace isobus
 	class FillAttributes : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			FillType = 1,
+			FillColour = 2,
+			FillPattern = 3,
+
+			NumberOfAttributes = 4
+		};
+
 		/// @brief Enumerates the different fill types for an object
 		enum class FillType : std::uint8_t
 		{
@@ -2260,6 +2934,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the fill pattern associated with this fill attributes object
 		/// @returns The fill pattern for this attribute object
@@ -2288,6 +2971,16 @@ namespace isobus
 	class InputAttributes : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			ValidationType = 1,
+
+			NumberOfAttributes = 2
+		};
+
 		/// @brief Constructor for a input attributes object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		InputAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -2303,6 +2996,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the validation string associated to this input attributes object
 		/// @returns The validation string associated to this input attributes object
@@ -2332,6 +3034,16 @@ namespace isobus
 	class ExtendedInputAttributes : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			ValidationType = 1,
+
+			NumberOfAttributes = 2
+		};
+
 		/// @brief Constructor for an extended input attributes object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		ExtendedInputAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -2347,6 +3059,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the number of code planes in this extended input attributes
 		/// @returns The number of code planes in this extended input attributes
@@ -2384,6 +3105,16 @@ namespace isobus
 	class ObjectPointer : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			Value = 1,
+
+			NumberOfAttributes = 2
+		};
+
 		/// @brief Constructor for a object pointer object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		ObjectPointer(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -2400,6 +3131,15 @@ namespace isobus
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
 
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 5; ///< The fewest bytes of IOP data that can represent this object
 	};
@@ -2409,6 +3149,18 @@ namespace isobus
 	class ExternalObjectPointer : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			DefaultObjectID = 1,
+			ExternalReferenceNAMEID = 2,
+			ExternalObjectID = 3,
+
+			NumberOfAttributes = 4
+		};
+
 		/// @brief Constructor for a object pointer object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		ExternalObjectPointer(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -2424,6 +3176,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the default object id which is the
 		/// object ID of an object which shall be displayed if the External Object ID is not valid,
@@ -2475,6 +3236,15 @@ namespace isobus
 	class Macro : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+
+			NumberOfAttributes = 1
+		};
+
 		/// @brief A subset of the VT command multiplexors that support use in macros
 		enum class Command
 		{
@@ -2524,6 +3294,15 @@ namespace isobus
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
 
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+
 		bool add_command_packet(std::array<std::uint8_t, CAN_DATA_LENGTH> command);
 
 		std::uint8_t get_number_of_commands() const;
@@ -2542,6 +3321,15 @@ namespace isobus
 	class ColourMap : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+
+			NumberOfAttributes = 1
+		};
+
 		/// @brief Constructor for a colour map object
 		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
 		ColourMap(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
@@ -2558,6 +3346,15 @@ namespace isobus
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
 
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 5; ///< The fewest bytes of IOP data that can represent this object
 	};
@@ -2566,6 +3363,18 @@ namespace isobus
 	class WindowMask : public VTObject
 	{
 	public:
+		/// @brief Enumerates this object's attributes which are assigned an attribute ID.
+		/// The Change Attribute command allows any writable attribute with an AID to be changed.
+		enum class AttributeName : std::uint8_t
+		{
+			Type = 0,
+			BackgroundColour = 1,
+			Options = 2,
+			Name = 3,
+
+			NumberOfAttributes = 4
+		};
+
 		/// @brief Enumerates the different kinds of window masks which imply how they are displayed and what they contain
 		enum class WindowType : std::uint8_t
 		{
@@ -2612,6 +3421,15 @@ namespace isobus
 		/// @brief Performs basic error checking on the object and returns if the object is valid
 		/// @returns `true` if the object passed basic error checks
 		bool get_is_valid() const override;
+
+		/// @brief Sets an attribute and optionally returns an error code in the last parameter
+		/// @param[in] attributeID The ID of the attribute to change
+		/// @param[in] rawAttributeData The raw data to change the attribute to, as decoded in little endian format with unused
+		/// bytes/bits set to zero.
+		/// @param[out] returnedError If this function returns false, this will be the error code. If the function
+		/// returns true, this value is undefined.
+		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
+		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns object ID of an Output String object or an Object Pointer object that points
 		/// to an Output String object that contains the string that gives a proper name to this object

@@ -220,6 +220,30 @@ namespace isobus
 	{
 	}
 
+	bool VTObject::replace_only_child_of_type(std::uint16_t newID, VirtualTerminalObjectType typeToRemove)
+	{
+		bool retVal = false;
+
+		for (std::uint16_t i = 0; i < get_number_children(); i++)
+		{
+			std::uint16_t childID = get_child_id(i);
+			auto childObject = thisObjectPool[childID];
+
+			if ((NULL_OBJECT_ID != childID) && (nullptr != childObject) && (VirtualTerminalObjectType::NumberVariable == childObject->get_object_type()))
+			{
+				remove_child(childID, get_child_x(i), get_child_y(i));
+				break;
+			}
+		}
+
+		if ((NULL_OBJECT_ID == newID) || (nullptr != thisObjectPool[newID]))
+		{
+			add_child(newID, 0, 0);
+			retVal = true;
+		}
+		return retVal;
+	}
+
 	WorkingSet::WorkingSet(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
 	  VTObject(memberObjectPool, currentColourTable),
 	  activeMask(NULL_OBJECT_ID),
@@ -277,6 +301,49 @@ namespace isobus
 		}
 		return ((!anyWrongChildType) &&
 		        (NULL_OBJECT_ID != objectID));
+	}
+
+	bool WorkingSet::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::BackgroundColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Selectable:
+				{
+					set_selectable(0 != rawAttributeData);
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::ActiveMask:
+				{
+					set_active_mask(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	bool WorkingSet::get_selectable() const
@@ -366,6 +433,42 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
+	bool DataMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(DataMask::AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<DataMask::AttributeName>(attributeID))
+			{
+				case DataMask::AttributeName::BackgroundColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case DataMask::AttributeName::SoftKeyMask:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::SoftKeyMask);
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
+	}
+
 	AlarmMask::AlarmMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
 	  VTObject(memberObjectPool, currentColourTable),
 	  softKeyMask(0),
@@ -433,6 +536,70 @@ namespace isobus
 		}
 		return ((!anyWrongChildType) &&
 		        (NULL_OBJECT_ID != objectID));
+	}
+
+	bool AlarmMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AlarmMask::AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AlarmMask::AttributeName>(attributeID))
+			{
+				case AlarmMask::AttributeName::BackgroundColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AlarmMask::AttributeName::SoftKeyMask:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::SoftKeyMask);
+				}
+				break;
+
+				case AlarmMask::AttributeName::Priority:
+				{
+					if (rawAttributeData <= static_cast<std::uint8_t>(AlarmMask::Priority::Low))
+					{
+						set_mask_priority(static_cast<AlarmMask::Priority>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::AnyOtherError;
+					}
+				}
+				break;
+
+				case AlarmMask::AttributeName::AcousticSignal:
+				{
+					if (rawAttributeData <= static_cast<std::uint8_t>(AlarmMask::AcousticSignal::None))
+					{
+						set_signal_priority(static_cast<AlarmMask::AcousticSignal>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::AnyOtherError;
+					}
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	AlarmMask::Priority AlarmMask::get_mask_priority() const
@@ -524,6 +691,49 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
+	bool Container::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Hidden:
+				{
+					set_hidden(0 != rawAttributeData);
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
+	}
+
 	bool Container::get_hidden() const
 	{
 		return hidden;
@@ -578,6 +788,35 @@ namespace isobus
 		}
 		return ((!anyWrongChildType) &&
 		        (NULL_OBJECT_ID != objectID));
+	}
+
+	bool SoftKeyMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::BackgroundColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	Key::Key(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
@@ -641,6 +880,42 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
+	bool Key::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::BackgroundColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::KeyCode:
+				{
+					set_key_code(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
+	}
+
 	std::uint8_t Key::get_key_code() const
 	{
 		return keyCode;
@@ -653,7 +928,8 @@ namespace isobus
 
 	KeyGroup::KeyGroup(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
 	  VTObject(memberObjectPool, currentColourTable),
-	  keyGroupIcon(NULL_OBJECT_ID)
+	  keyGroupIcon(NULL_OBJECT_ID),
+	  optionsBitfield(0)
 	{
 	}
 
@@ -695,6 +971,83 @@ namespace isobus
 		}
 		return ((!anyWrongChildType) &&
 		        (NULL_OBJECT_ID != objectID));
+	}
+
+	bool KeyGroup::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Options:
+				{
+					set_options(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Name:
+				{
+					auto newName = static_cast<std::uint16_t>(rawAttributeData);
+					for (std::uint16_t i = 0; i < get_number_children(); i++)
+					{
+						std::uint16_t childID = get_child_id(i);
+						auto childObject = thisObjectPool[childID];
+
+						if ((NULL_OBJECT_ID != childID) &&
+						    (nullptr != childObject) &&
+						    ((VirtualTerminalObjectType::OutputString == childObject->get_object_type()) ||
+						     (VirtualTerminalObjectType::ObjectPointer == childObject->get_object_type())))
+						{
+							if (VirtualTerminalObjectType::ObjectPointer == childObject->get_object_type())
+							{
+								if (childObject->get_number_children() > 0)
+								{
+									auto label = thisObjectPool[std::static_pointer_cast<ObjectPointer>(childObject)->get_child_id(0)];
+
+									if ((nullptr != label) &&
+									    (VirtualTerminalObjectType::OutputString == label->get_object_type()))
+									{
+										remove_child(label->get_id(), 0, 0);
+										break;
+									}
+								}
+							}
+							else
+							{
+								remove_child(childID, get_child_x(i), get_child_y(i));
+								break;
+							}
+						}
+					}
+
+					if ((NULL_OBJECT_ID == newName) || (nullptr != thisObjectPool[newName]))
+					{
+						add_child(newName, 0, 0);
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::AnyOtherError;
+					}
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	std::uint16_t KeyGroup::get_key_group_icon() const
@@ -791,6 +1144,70 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
+	bool Button::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::BackgroundColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::BorderColour:
+				{
+					set_border_colour(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::KeyCode:
+				{
+					set_key_code(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Options:
+				{
+					set_options(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
+	}
+
 	std::uint8_t Button::get_key_code() const
 	{
 		return keyCode;
@@ -878,6 +1295,70 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
+	bool InputBoolean::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::BackgroundColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::ForegroundColour:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FontAttributes);
+				}
+				break;
+
+				case AttributeName::VariableReference:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+				}
+				break;
+
+				case AttributeName::Value:
+				{
+					set_value(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Enabled:
+				{
+					set_enabled(0 != rawAttributeData);
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
+	}
+
 	std::uint8_t InputBoolean::get_value() const
 	{
 		return value;
@@ -945,6 +1426,91 @@ namespace isobus
 		}
 		return ((!anyWrongChildType) &&
 		        (NULL_OBJECT_ID != objectID));
+	}
+
+	bool InputString::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::BackgroundColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::FontAttributes:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FontAttributes);
+				}
+				break;
+
+				case AttributeName::InputAttributes:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::InputAttributes);
+				}
+				break;
+
+				case AttributeName::Options:
+				{
+					set_options(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::VariableReference:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+				}
+				break;
+
+				case AttributeName::Justification:
+				{
+					set_justification_bitfield(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Enabled:
+				{
+					set_enabled(0 != rawAttributeData);
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	bool InputString::get_enabled() const
@@ -1056,6 +1622,135 @@ namespace isobus
 		}
 		return ((!anyWrongChildType) &&
 		        (NULL_OBJECT_ID != objectID));
+	}
+
+	bool InputNumber::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::BackgroundColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::FontAttributes:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FontAttributes);
+				}
+				break;
+
+				case AttributeName::Options:
+				{
+					set_options(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::VariableReference:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+				}
+				break;
+
+				case AttributeName::MinValue:
+				{
+					set_minimum_value(rawAttributeData);
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::MaxValue:
+				{
+					set_maximum_value(rawAttributeData);
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Offset:
+				{
+					auto temp = reinterpret_cast<std::int32_t *>(&rawAttributeData);
+					set_offset(*temp);
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Scale:
+				{
+					auto temp = reinterpret_cast<float *>(&rawAttributeData);
+					set_scale(*temp);
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::NumberOfDecimals:
+				{
+					set_number_of_decimals(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Format:
+				{
+					set_format(0 != rawAttributeData);
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Justification:
+				{
+					set_justification_bitfield(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Value:
+				{
+					set_value(rawAttributeData);
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Options2:
+				{
+					set_options2(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	InputNumber::HorizontalJustification InputNumber::get_horizontal_justification() const
@@ -1234,6 +1929,63 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
+	bool InputList::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::VariableReference:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+				}
+				break;
+
+				case AttributeName::Value:
+				{
+					set_value(rawAttributeData);
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Options:
+				{
+					set_options(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
+	}
+
 	bool InputList::get_option(Options option) const
 	{
 		return (0 != (optionsBitfield & (1 << static_cast<std::uint8_t>(option))));
@@ -1311,6 +2063,77 @@ namespace isobus
 		}
 		return ((!anyWrongChildType) &&
 		        (NULL_OBJECT_ID != objectID));
+	}
+
+	bool OutputString::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::BackgroundColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::FontAttributes:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FontAttributes);
+				}
+				break;
+
+				case AttributeName::Options:
+				{
+					set_options(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::VariableReference:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+				}
+				break;
+
+				case AttributeName::Justification:
+				{
+					set_justification_bitfield(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	bool OutputString::get_option(Options option) const
@@ -1409,6 +2232,107 @@ namespace isobus
 		}
 		return ((!anyWrongChildType) &&
 		        (NULL_OBJECT_ID != objectID));
+	}
+
+	bool OutputNumber::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::BackgroundColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::FontAttributes:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FontAttributes);
+				}
+				break;
+
+				case AttributeName::Options:
+				{
+					set_options(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::VariableReference:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+				}
+				break;
+
+				case AttributeName::Offset:
+				{
+					auto temp = reinterpret_cast<std::int32_t *>(&rawAttributeData);
+					set_offset(*temp);
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Scale:
+				{
+					auto temp = reinterpret_cast<float *>(&rawAttributeData);
+					set_scale(*temp);
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::NumberOfDecimals:
+				{
+					set_number_of_decimals(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Format:
+				{
+					set_format(0 != rawAttributeData);
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Justification:
+				{
+					set_justification_bitfield(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	bool OutputNumber::get_option(Options option) const
@@ -1544,6 +2468,56 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
+	bool OutputList::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::VariableReference:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+				}
+				break;
+
+				case AttributeName::Value:
+				{
+					set_value(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
+	}
+
 	std::uint8_t OutputList::get_number_of_list_items() const
 	{
 		return numberOfListItems;
@@ -1596,6 +2570,63 @@ namespace isobus
 		}
 		return ((!anyWrongChildType) &&
 		        (NULL_OBJECT_ID != objectID));
+	}
+
+	bool OutputLine::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::LineAttributes:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::LineAttributes);
+				}
+				break;
+
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::LineDirection:
+				{
+					if (rawAttributeData <= static_cast<std::uint8_t>(LineDirection::BottomLeftToTopRight))
+					{
+						set_line_direction(static_cast<LineDirection>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::AnyOtherError;
+					}
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	std::uint32_t OutputLine::get_minumum_object_length() const
@@ -1658,6 +2689,63 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
+	bool OutputRectangle::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::LineAttributes:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::LineAttributes);
+				}
+				break;
+
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::LineSuppression:
+				{
+					set_line_suppression_bitfield(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::FillAttributes:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FillAttributes);
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
+	}
+
 	std::uint8_t OutputRectangle::get_line_suppression_bitfield() const
 	{
 		return lineSuppressionBitfield;
@@ -1713,6 +2801,84 @@ namespace isobus
 		}
 		return ((!anyWrongChildType) &&
 		        (NULL_OBJECT_ID != objectID));
+	}
+
+	bool OutputEllipse::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::LineAttributes:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::LineAttributes);
+				}
+				break;
+
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::EllipseType:
+				{
+					if (rawAttributeData <= static_cast<std::uint8_t>(EllipseType::ClosedEllipseSection))
+					{
+						set_ellipse_type(static_cast<EllipseType>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::AnyOtherError;
+					}
+				}
+				break;
+
+				case AttributeName::StartAngle:
+				{
+					set_start_angle(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::EndAngle:
+				{
+					set_end_angle(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::FillAttributes:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FillAttributes);
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	OutputEllipse::EllipseType OutputEllipse::get_ellipse_type() const
@@ -1788,6 +2954,70 @@ namespace isobus
 		}
 		return ((!anyWrongChildType) &&
 		        (NULL_OBJECT_ID != objectID));
+	}
+
+	bool OutputPolygon::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::LineAttributes:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::LineAttributes);
+				}
+				break;
+
+				case AttributeName::FillAttributes:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::FillAttributes);
+				}
+				break;
+
+				case AttributeName::PolygonType:
+				{
+					if (rawAttributeData <= static_cast<std::uint8_t>(PolygonType::Open))
+					{
+						set_type(static_cast<PolygonType>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::AnyOtherError;
+					}
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	void OutputPolygon::add_point(std::uint16_t x, std::uint16_t y)
@@ -1874,12 +3104,118 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
+	bool OutputMeter::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::NeedleColour:
+				{
+					set_needle_colour(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::BorderColour:
+				{
+					set_border_colour(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::ArcAndTickColour:
+				{
+					set_arc_and_tick_colour(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Options:
+				{
+					set_options(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::NumberOfTicks:
+				{
+					set_number_of_ticks(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::StartAngle:
+				{
+					set_start_angle(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::EndAngle:
+				{
+					set_end_angle(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::MinValue:
+				{
+					set_min_value(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::MaxValue:
+				{
+					set_max_value(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::VariableReference:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+				}
+				break;
+
+				case AttributeName::Value:
+				{
+					set_value(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
+	}
+
 	std::uint16_t OutputMeter::get_min_value() const
 	{
 		return minValue;
 	}
 
-	void OutputMeter::set_min_value(std::uint8_t value)
+	void OutputMeter::set_min_value(std::uint16_t value)
 	{
 		minValue = value;
 	}
@@ -1889,7 +3225,7 @@ namespace isobus
 		return maxValue;
 	}
 
-	void OutputMeter::set_max_value(std::uint8_t value)
+	void OutputMeter::set_max_value(std::uint16_t value)
 	{
 		maxValue = value;
 	}
@@ -1899,7 +3235,7 @@ namespace isobus
 		return value;
 	}
 
-	void OutputMeter::set_value(std::uint8_t aValue)
+	void OutputMeter::set_value(std::uint16_t aValue)
 	{
 		value = aValue;
 	}
@@ -2036,6 +3372,112 @@ namespace isobus
 		}
 		return ((!anyWrongChildType) &&
 		        (NULL_OBJECT_ID != objectID));
+	}
+
+	bool OutputLinearBarGraph::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Colour:
+				{
+					set_colour(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::TargetLineColour:
+				{
+					set_target_line_colour(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Options:
+				{
+					set_options(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::NumberOfTicks:
+				{
+					set_number_of_ticks(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::MinValue:
+				{
+					set_min_value(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::MaxValue:
+				{
+					set_max_value(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::VariableReference:
+				{
+					returnedError = AttributeError::AnyOtherError;
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+				}
+				break;
+
+				case AttributeName::TargetValueVariableReference:
+				{
+					set_target_value_reference(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::TargetValue:
+				{
+					set_target_value(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Value:
+				{
+					set_value(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	std::uint16_t OutputLinearBarGraph::get_min_value() const
@@ -2194,6 +3636,118 @@ namespace isobus
 		        (NULL_OBJECT_ID != objectID));
 	}
 
+	bool OutputArchedBarGraph::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Height:
+				{
+					set_height(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Colour:
+				{
+					set_colour(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::TargetLineColour:
+				{
+					set_target_line_colour(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Options:
+				{
+					set_options(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::StartAngle:
+				{
+					set_start_angle(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::EndAngle:
+				{
+					set_end_angle(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::BarGraphWidth:
+				{
+					set_bar_graph_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::MinValue:
+				{
+					set_min_value(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::MaxValue:
+				{
+					set_max_value(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::VariableReference:
+				{
+					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+				}
+				break;
+
+				case AttributeName::TargetValueVariableReference:
+				{
+					set_target_value_reference(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::TargetValue:
+				{
+					set_target_value(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
+	}
+
 	std::uint16_t OutputArchedBarGraph::get_bar_graph_width() const
 	{
 		return barGraphWidth;
@@ -2342,6 +3896,49 @@ namespace isobus
 		return true;
 	}
 
+	bool PictureGraphic::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::Width:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Options:
+				{
+					set_options(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::TransparencyColour:
+				{
+					set_transparency_colour(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
+	}
+
 	std::vector<std::uint8_t> &PictureGraphic::get_raw_data()
 	{
 		return rawData;
@@ -2457,6 +4054,12 @@ namespace isobus
 		return true;
 	}
 
+	bool NumberVariable::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		returnedError = AttributeError::InvalidAttributeID;
+		return false;
+	}
+
 	std::uint32_t NumberVariable::get_value() const
 	{
 		return value;
@@ -2485,6 +4088,12 @@ namespace isobus
 	bool StringVariable::get_is_valid() const
 	{
 		return true;
+	}
+
+	bool StringVariable::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		returnedError = AttributeError::InvalidAttributeID;
+		return false;
 	}
 
 	std::string StringVariable::get_value()
@@ -2519,6 +4128,63 @@ namespace isobus
 	bool FontAttributes::get_is_valid() const
 	{
 		return true;
+	}
+
+	bool FontAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::FontColour:
+				{
+					set_colour(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::FontSize:
+				{
+					if (rawAttributeData <= static_cast<std::uint8_t>(FontAttributes::FontSize::Size128x192))
+					{
+						set_size(static_cast<FontAttributes::FontSize>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::AnyOtherError;
+					}
+				}
+				break;
+
+				case AttributeName::FontType:
+				{
+					set_type(static_cast<FontAttributes::FontType>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::FontStyle:
+				{
+					set_style(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	FontAttributes::FontType FontAttributes::get_type() const
@@ -2746,6 +4412,49 @@ namespace isobus
 		return true;
 	}
 
+	bool LineAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::LineColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::LineWidth:
+				{
+					set_width(static_cast<std::uint16_t>(rawAttributeData & 0xFF));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::LineArt:
+				{
+					set_line_art_bit_pattern(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
+	}
+
 	std::uint16_t LineAttributes::get_line_art_bit_pattern() const
 	{
 		return lineArtBitpattern;
@@ -2776,6 +4485,56 @@ namespace isobus
 	bool FillAttributes::get_is_valid() const
 	{
 		return true;
+	}
+
+	bool FillAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::FillType:
+				{
+					if (rawAttributeData <= static_cast<std::uint8_t>(FillType::FillWithPatternGivenByFillPatternAttribute))
+					{
+						set_type(static_cast<FillType>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::AnyOtherError;
+					}
+				}
+				break;
+
+				case AttributeName::FillColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::FillPattern:
+				{
+					set_fill_pattern(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	std::uint16_t FillAttributes::get_fill_pattern() const
@@ -2819,6 +4578,12 @@ namespace isobus
 		return true;
 	}
 
+	bool InputAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		returnedError = AttributeError::InvalidAttributeID;
+		return false;
+	}
+
 	std::string InputAttributes::get_validation_string() const
 	{
 		return validationString;
@@ -2858,6 +4623,12 @@ namespace isobus
 	bool ExtendedInputAttributes::get_is_valid() const
 	{
 		return true;
+	}
+
+	bool ExtendedInputAttributes::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		returnedError = AttributeError::InvalidAttributeID;
+		return false;
 	}
 
 	std::uint8_t ExtendedInputAttributes::get_number_of_code_planes() const
@@ -2900,6 +4671,12 @@ namespace isobus
 		return true;
 	}
 
+	bool ObjectPointer::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		returnedError = AttributeError::InvalidAttributeID;
+		return false;
+	}
+
 	ExternalObjectPointer::ExternalObjectPointer(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
 	  VTObject(memberObjectPool, currentColourTable)
 	{
@@ -2918,6 +4695,57 @@ namespace isobus
 	bool ExternalObjectPointer::get_is_valid() const
 	{
 		return true;
+	}
+
+	bool ExternalObjectPointer::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::DefaultObjectID:
+				{
+					if ((NULL_OBJECT_ID == rawAttributeData) ||
+					    (nullptr != thisObjectPool[static_cast<std::uint16_t>(rawAttributeData)]))
+					{
+						set_default_object_id(static_cast<std::uint16_t>(rawAttributeData));
+						retVal = true;
+					}
+					else
+					{
+						returnedError = AttributeError::AnyOtherError;
+					}
+				}
+				break;
+
+				case AttributeName::ExternalReferenceNAMEID:
+				{
+					set_external_reference_name_id(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::ExternalObjectID:
+				{
+					set_external_object_id(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	std::uint16_t ExternalObjectPointer::get_default_object_id() const
@@ -3029,6 +4857,12 @@ namespace isobus
 		return retVal;
 	}
 
+	bool Macro::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		returnedError = AttributeError::InvalidAttributeID;
+		return false;
+	}
+
 	bool Macro::add_command_packet(std::array<std::uint8_t, CAN_DATA_LENGTH> command)
 	{
 		bool retVal = false;
@@ -3089,6 +4923,12 @@ namespace isobus
 	bool ColourMap::get_is_valid() const
 	{
 		return true;
+	}
+
+	bool ColourMap::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		returnedError = AttributeError::InvalidAttributeID;
+		return false;
 	}
 
 	WindowMask::WindowMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
@@ -3460,6 +5300,49 @@ namespace isobus
 			break;
 		}
 		return !anyWrongChildType;
+	}
+
+	bool WindowMask::set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError)
+	{
+		bool retVal = false;
+
+		if (attributeID < static_cast<std::uint8_t>(AttributeName::NumberOfAttributes))
+		{
+			switch (static_cast<AttributeName>(attributeID))
+			{
+				case AttributeName::BackgroundColour:
+				{
+					set_background_color(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Options:
+				{
+					set_options(static_cast<std::uint8_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				case AttributeName::Name:
+				{
+					set_name_object_id(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
+				}
+				break;
+
+				default:
+				{
+					returnedError = AttributeError::InvalidAttributeID;
+				}
+				break;
+			}
+		}
+		else
+		{
+			returnedError = AttributeError::InvalidAttributeID;
+		}
+		return retVal;
 	}
 
 	std::uint16_t WindowMask::get_name_object_id() const
