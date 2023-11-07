@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <cmath>
 
 #include "isobus/hardware_integration/can_hardware_interface.hpp"
 #include "isobus/hardware_integration/virtual_can_plugin.hpp"
@@ -94,11 +95,7 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 	CANNetworkManager::process_receive_can_message_frame(testFrame);
 
 	// Get the virtual CAN plugin back to a known state
-	while (!testPlugin.get_queue_empty())
-	{
-		testPlugin.read_frame(testFrame);
-	}
-	ASSERT_TRUE(testPlugin.get_queue_empty());
+	testPlugin.clear_queue();
 
 	// Ready to run some tests
 	std::cerr << "These tests use BAM to transmit, so they may take several seconds.." << std::endl;
@@ -125,10 +122,8 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		// Make sure we're using ISO mode for this parsing to work
 		ASSERT_FALSE(protocolUnderTest.get_j1939_mode());
 
-		// This message gets sent with BAM with PGN 0xFDC5, so we'll have to wait a while for the message to send.
+		// This message gets sent with BAM with PGN 0xFDC5.
 		// This a a nice test because it exercises the transport protocol as well
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		std::uint16_t expectedBAMLength = 56; // This is all strings lengths plus delimiters
@@ -273,13 +268,11 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 
 		protocolUnderTest.update();
 
-		// Make sure we're using ISO mode for this parsing to work
+		// Make sure we're using J1939 mode for this parsing to work
 		ASSERT_TRUE(protocolUnderTest.get_j1939_mode());
 
-		// This message gets sent with BAM with PGN 0xFDC5, so we'll have to wait a while for the message to send.
+		// This message gets sent with BAM with PGN 0xFDC5.
 		// This a a nice test because it exercises the transport protocol as well
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		// DM1 might be sent in j1939 mode, need to screen it out
@@ -442,9 +435,6 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 
 		protocolUnderTest.update();
 
-		// This message gets sent with BAM, so we'll have to wait a while for the message to send.
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 
 		std::uint16_t expectedBAMLength = 40; // This is all strings lengths plus delimiters
@@ -588,9 +578,6 @@ TEST(DIAGNOSTIC_PROTOCOL_TESTS, MessageEncoding)
 		CANNetworkManager::CANNetwork.update();
 
 		protocolUnderTest.update();
-
-		// This message gets sent with BAM, so we'll have to wait a while for the message to send.
-		std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
 		EXPECT_TRUE(testPlugin.read_frame(testFrame));
 

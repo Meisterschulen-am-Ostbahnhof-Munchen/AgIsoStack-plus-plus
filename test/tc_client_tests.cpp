@@ -1136,8 +1136,8 @@ TEST(TASK_CONTROLLER_CLIENT_TESTS, StateMachineTests)
 	CANHardwareInterface::stop();
 
 	//! @todo try to reduce the reference count, such that that we don't use a control function after it is destroyed
-	ASSERT_TRUE(tcPartner->destroy(4));
-	ASSERT_TRUE(internalECU->destroy(5));
+	ASSERT_TRUE(tcPartner->destroy(3));
+	ASSERT_TRUE(internalECU->destroy(4));
 }
 
 TEST(TASK_CONTROLLER_CLIENT_TESTS, ClientSettings)

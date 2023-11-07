@@ -100,18 +100,17 @@ namespace isobus
 		if (activeSessions.size() >= CANNetworkManager::CANNetwork.get_configuration().get_max_number_transport_protocol_sessions())
 		{
 			// TODO: consider using maximum memory instead of maximum number of sessions
-			CANStackLogger::warn("[TP]: Ignoring Broadcast Announcement Message (BAM) for %#06X, configured maximum number of sessions reached.", pgn);
+			CANStackLogger::warn("[TP]: Ignoring Broadcast Announcement Message (BAM) for 0x%05X, configured maximum number of sessions reached.", pgn);
 		}
 		else
 		{
 			if (auto session = get_session(source, nullptr))
 			{
-				CANStackLogger::warn("[TP]: Received Broadcast Announcement Message (BAM) while a session already existed for this source, overwriting for %#06X...", pgn);
+				CANStackLogger::warn("[TP]: Received Broadcast Announcement Message (BAM) while a session already existed for this source (%hu), overwriting for 0x%05X...", source->get_address(), pgn);
 				close_session(*session, false);
 			}
 
-			auto data = std::make_unique<CANTransportDataVector>();
-			data->reserve(totalMessageSize);
+			auto data = std::make_unique<CANTransportDataVector>(totalMessageSize);
 
 			TransportProtocolSession session(TransportProtocolSession::Direction::Receive,
 			                                 { pgn,
@@ -122,7 +121,7 @@ namespace isobus
 			session.set_state(StateMachineState::RxDataSession);
 			activeSessions.push_back(std::move(session));
 
-			CANStackLogger::debug("[TP]: New rx broadcast message session for %#06X. Source: %hu", pgn, source->get_address());
+			CANStackLogger::debug("[TP]: New rx broadcast message session for 0x%05X. Source: %hu", pgn, source->get_address());
 		}
 	}
 
@@ -136,7 +135,7 @@ namespace isobus
 		if (activeSessions.size() >= CANNetworkManager::CANNetwork.get_configuration().get_max_number_transport_protocol_sessions())
 		{
 			// TODO: consider using maximum memory instead of maximum number of sessions
-			CANStackLogger::warn("[TP]: Replying with abort to Request To Send (RTS) for %#06X, configured maximum number of sessions reached.", pgn);
+			CANStackLogger::warn("[TP]: Replying with abort to Request To Send (RTS) for 0x%05X, configured maximum number of sessions reached.", pgn);
 			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, pgn, ConnectionAbortReason::AlreadyInCMSession);
 		}
 		else
@@ -145,18 +144,17 @@ namespace isobus
 			{
 				if (session->sessionMessage.get_pgn() != pgn)
 				{
-					CANStackLogger::error("[TP]: Received Request To Send (RTS) while a session already existed for this source and destination, aborting for %#06X...", pgn);
+					CANStackLogger::error("[TP]: Received Request To Send (RTS) while a session already existed for this source and destination, aborting for 0x%05X...", pgn);
 					abort_session(*session, ConnectionAbortReason::AlreadyInCMSession);
 				}
 				else
 				{
-					CANStackLogger::warn("[TP]: Received Request To Send (RTS) while a session already existed for this source and destination and pgn, overwriting for %#06X...", pgn);
+					CANStackLogger::warn("[TP]: Received Request To Send (RTS) while a session already existed for this source and destination and pgn, overwriting for 0x%05X...", pgn);
 					close_session(*session, false);
 				}
 			}
 
-			auto data = std::make_unique<CANTransportDataVector>();
-			data->reserve(totalMessageSize);
+			auto data = std::make_unique<CANTransportDataVector>(totalMessageSize);
 
 			TransportProtocolSession session(TransportProtocolSession::Direction::Receive,
 			                                 { pgn,
@@ -181,19 +179,19 @@ namespace isobus
 		{
 			if (session->sessionMessage.get_pgn() != pgn)
 			{
-				CANStackLogger::error("[TP]: Received a Clear To Send (CTS) message for %#06X while a session already existed for this source and destination, sending abort for both...", pgn);
+				CANStackLogger::error("[TP]: Received a Clear To Send (CTS) message for 0x%05X while a session already existed for this source and destination, sending abort for both...", pgn);
 				abort_session(*session, ConnectionAbortReason::AnyOtherError);
 				send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, pgn, ConnectionAbortReason::AnyOtherError);
 			}
 			else if (nextPacketNumber != (session->lastPacketNumber + 1))
 			{
-				CANStackLogger::error("[TP]: Received a Clear To Send (CTS) message for %#06X with a bad sequence number, aborting...", pgn);
+				CANStackLogger::error("[TP]: Received a Clear To Send (CTS) message for 0x%05X with a bad sequence number, aborting...", pgn);
 				abort_session(*session, ConnectionAbortReason::BadSequenceNumber);
 			}
 			else if (StateMachineState::WaitForClearToSend != session->state)
 			{
 				// The session exists, but we're not in the right state to receive a CTS, so we must abort
-				CANStackLogger::warn("[TP]: Received a Clear To Send (CTS) message for %#06X, but not expecting one, aborting session.", pgn);
+				CANStackLogger::warn("[TP]: Received a Clear To Send (CTS) message for 0x%05X, but not expecting one, aborting session.", pgn);
 				abort_session(*session, ConnectionAbortReason::ClearToSendReceivedWhileTransferInProgress);
 			}
 			else
@@ -213,7 +211,7 @@ namespace isobus
 		else
 		{
 			// We got a CTS but no session exists. Aborting clears up the situation faster than waiting for them to timeout
-			CANStackLogger::warn("[TP]: Received Clear To Send (CTS) for %#06X while no session existed for this source and destination, sending abort.", pgn);
+			CANStackLogger::warn("[TP]: Received Clear To Send (CTS) for 0x%05X while no session existed for this source and destination, sending abort.", pgn);
 			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, pgn, ConnectionAbortReason::AnyOtherError);
 		}
 	}
@@ -226,19 +224,19 @@ namespace isobus
 		{
 			if (StateMachineState::WaitForEndOfMessageAcknowledge == session->state)
 			{
-				// We completed our Tx session!
+				CANStackLogger::debug("[TP]: Completed rx session for 0x%05X from %hu", pgn, source->get_address());
 				session->state = StateMachineState::None;
 				close_session(*session, true);
 			}
 			else
 			{
 				// The session exists, but we're not in the right state to receive an EOM, by the standard we must ignore it
-				CANStackLogger::warn("[TP]: Received an End Of Message Acknowledgement message for %#06X, but not expecting one, ignoring.", pgn);
+				CANStackLogger::warn("[TP]: Received an End Of Message Acknowledgement message for 0x%05X, but not expecting one, ignoring.", pgn);
 			}
 		}
 		else
 		{
-			CANStackLogger::warn("[TP]: Received End Of Message Acknowledgement for %#06X while no session existed for this source and destination, sending abort.", pgn);
+			CANStackLogger::warn("[TP]: Received End Of Message Acknowledgement for 0x%05X while no session existed for this source and destination, sending abort.", pgn);
 			send_abort(std::static_pointer_cast<InternalControlFunction>(destination), source, pgn, ConnectionAbortReason::AnyOtherError);
 		}
 	}
@@ -255,7 +253,7 @@ namespace isobus
 			if (session->sessionMessage.get_pgn() == pgn)
 			{
 				foundSession = true;
-				CANStackLogger::error("[TP]: Received an abort (reason=%hu) for an rx session for PGN %#06X", static_cast<uint8_t>(reason), pgn);
+				CANStackLogger::error("[TP]: Received an abort (reason=%hu) for an rx session for PGN 0x%05X", static_cast<uint8_t>(reason), pgn);
 				close_session(*session, false);
 			}
 		}
@@ -264,14 +262,14 @@ namespace isobus
 			if (session->sessionMessage.get_pgn() == pgn)
 			{
 				foundSession = true;
-				CANStackLogger::error("[TP]: Received an abort (reason=%hu) for a tx session for PGN %#06X", static_cast<uint8_t>(reason), pgn);
+				CANStackLogger::error("[TP]: Received an abort (reason=%hu) for a tx session for PGN 0x%05X", static_cast<uint8_t>(reason), pgn);
 				close_session(*session, false);
 			}
 		}
 
 		if (!foundSession)
 		{
-			CANStackLogger::warn("[TP]: Received an abort (reason=%hu) with no matching session for PGN %#06X", static_cast<uint8_t>(reason), pgn);
+			CANStackLogger::warn("[TP]: Received an abort (reason=%hu) with no matching session for PGN 0x%05X", static_cast<uint8_t>(reason), pgn);
 		}
 	}
 
@@ -393,7 +391,7 @@ namespace isobus
 			}
 			else if (message.get_uint8_at(SEQUENCE_NUMBER_DATA_INDEX) == session->lastPacketNumber)
 			{
-				CANStackLogger::error("[TP]: Aborting rx session for %#06X due to duplicate sequence number", session->sessionMessage.get_pgn());
+				CANStackLogger::error("[TP]: Aborting rx session for 0x%05X due to duplicate sequence number", session->sessionMessage.get_pgn());
 				abort_session(*session, ConnectionAbortReason::DuplicateSequenceNumber);
 			}
 			else if (message.get_uint8_at(SEQUENCE_NUMBER_DATA_INDEX) == (session->lastPacketNumber + 1))
@@ -414,14 +412,19 @@ namespace isobus
 					{
 						send_end_of_session_acknowledgement(*session);
 					}
-					CANNetworkManager::CANNetwork.process_any_control_function_pgn_callbacks(session->sessionMessage.construct_message());
-					CANNetworkManager::CANNetwork.protocol_message_callback(session->sessionMessage.construct_message());
+					else
+					{
+						CANStackLogger::debug("[TP]: Completed broadcast rx session for 0x%05X", session->sessionMessage.get_pgn());
+					}
+					auto completedMessage = session->sessionMessage.construct_message();
+					CANNetworkManager::CANNetwork.process_any_control_function_pgn_callbacks(completedMessage);
+					CANNetworkManager::CANNetwork.protocol_message_callback(completedMessage);
 					close_session(*session, true);
 				}
 			}
 			else
 			{
-				CANStackLogger::error("[TP]: Aborting rx session for %#06X due to bad sequence number", session->sessionMessage.get_pgn());
+				CANStackLogger::error("[TP]: Aborting rx session for 0x%05X due to bad sequence number", session->sessionMessage.get_pgn());
 				abort_session(*session, ConnectionAbortReason::BadSequenceNumber);
 			}
 		}
@@ -453,7 +456,7 @@ namespace isobus
 
 				case static_cast<std::uint32_t>(CANLibParameterGroupNumber::TransportProtocolDataTransfer):
 				{
-					if (PROTOCOL_BYTES_PER_FRAME == message.get_data_length())
+					if (CAN_DATA_LENGTH == message.get_data_length())
 					{
 						process_data_transfer_message(message);
 					}
@@ -511,17 +514,21 @@ namespace isobus
 		session.sessionCompleteCallback = sessionCompleteCallback;
 		session.parent = parentPointer;
 
-		if (nullptr != destination)
-		{
-			// Destination specific message
-			session.set_state(StateMachineState::RequestToSend);
-		}
-		else
+		if (session.sessionMessage.is_destination_global())
 		{
 			// Broadcast message
 			session.set_state(StateMachineState::BroadcastAnnounce);
 		}
+		else
+		{
+			// Destination specific message
+			session.set_state(StateMachineState::RequestToSend);
+		}
 		activeSessions.push_back(std::move(session));
+		CANStackLogger::debug("[TP]: New tx session for 0x%05X. Source: %hu, Destination: %s",
+		                      parameterGroupNumber,
+		                      source->get_address(),
+		                      (nullptr == destination) ? "Global" : to_string(destination->get_address()).c_str());
 		return true;
 	}
 
@@ -547,7 +554,7 @@ namespace isobus
 		std::uint32_t framesSentThisUpdate = 0;
 
 		// Try and send packets
-		const auto &data = session.sessionMessage.get_data();
+		auto &data = session.sessionMessage.get_data();
 		for (std::uint8_t i = session.lastPacketNumber; i < session.packetCount; i++)
 		{
 			buffer[0] = (session.processedPacketsThisSession + 1);
@@ -600,7 +607,7 @@ namespace isobus
 			{
 				if (session.sessionMessage.is_destination_global())
 				{
-					// Broadcast tx message is complete
+					CANStackLogger::debug("[TP]: Completed broadcast tx session for 0x%05X", session.sessionMessage.get_pgn());
 					close_session(session, true);
 				}
 				else
@@ -636,7 +643,7 @@ namespace isobus
 			{
 				if (SystemTiming::time_expired_ms(session.timestamp_ms, T2_T3_TIMEOUT_MS))
 				{
-					CANStackLogger::error("[TP]: Timeout tx session for %#06X", session.sessionMessage.get_pgn());
+					CANStackLogger::error("[TP]: Timeout tx session for 0x%05X", session.sessionMessage.get_pgn());
 					abort_session(session, ConnectionAbortReason::Timeout);
 				}
 			}
@@ -876,17 +883,16 @@ namespace isobus
 	bool isobus::TransportProtocolManager::has_session(std::shared_ptr<ControlFunction> source, std::shared_ptr<ControlFunction> destination)
 	{
 		return std::any_of(activeSessions.begin(), activeSessions.end(), [&](const TransportProtocolSession &session) {
-			return ((session.sessionMessage.get_source().lock() == source) &&
-			        (session.sessionMessage.get_destination().lock() == destination));
+			return session.sessionMessage.matches(source, destination);
 		});
 	}
 
 	TransportProtocolManager::TransportProtocolSession *TransportProtocolManager::get_session(std::shared_ptr<ControlFunction> source,
 	                                                                                          std::shared_ptr<ControlFunction> destination)
 	{
-		return &*std::find_if(activeSessions.begin(), activeSessions.end(), [&](const TransportProtocolSession &session) {
-			return ((session.sessionMessage.get_source().lock() == source) &&
-			        (session.sessionMessage.get_destination().lock() == destination));
+		auto result = std::find_if(activeSessions.begin(), activeSessions.end(), [&](const TransportProtocolSession &session) {
+			return session.sessionMessage.matches(source, destination);
 		});
+		return (activeSessions.end() != result) ? &(*result) : nullptr;
 	}
 }

@@ -136,11 +136,11 @@ namespace isobus
 			std::unique_ptr<CANTransportData> data;
 			if (nullptr != frameChunkCallback)
 			{
-				//! @todo use the frameChunkCallback to send the message
+				data = std::make_unique<CANTransportDataCallback>(dataLength, frameChunkCallback, parentPointer);
 			}
 			else
 			{
-				data = std::make_unique<CANTransportDataView>(const_cast<std::uint8_t *>(dataBuffer), static_cast<size_t>(dataLength));
+				data = std::make_unique<CANTransportDataVector>(dataBuffer, dataLength);
 			}
 
 			if (transportProtocol.protocol_transmit_message(parameterGroupNumber,
@@ -151,27 +151,30 @@ namespace isobus
 			                                                parentPointer))
 			{
 				// Successfully sent via the transport protocol
+				retVal = true;
 			}
-
-			//! @todo convert the other protocols to stop using the abstract protocollib class
-			CANLibProtocol *currentProtocol;
-			// See if any transport layer protocol can handle this message
-			for (std::uint32_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
+			else
 			{
-				if (CANLibProtocol::get_protocol(i, currentProtocol))
+				//! @todo convert the other protocols to stop using the abstract protocollib class
+				CANLibProtocol *currentProtocol;
+				// See if any transport layer protocol can handle this message
+				for (std::uint32_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
 				{
-					retVal = currentProtocol->protocol_transmit_message(parameterGroupNumber,
-					                                                    dataBuffer,
-					                                                    dataLength,
-					                                                    sourceControlFunction,
-					                                                    destinationControlFunction,
-					                                                    transmitCompleteCallback,
-					                                                    parentPointer,
-					                                                    frameChunkCallback);
-
-					if (retVal)
+					if (CANLibProtocol::get_protocol(i, currentProtocol))
 					{
-						break;
+						retVal = currentProtocol->protocol_transmit_message(parameterGroupNumber,
+						                                                    dataBuffer,
+						                                                    dataLength,
+						                                                    sourceControlFunction,
+						                                                    destinationControlFunction,
+						                                                    transmitCompleteCallback,
+						                                                    parentPointer,
+						                                                    frameChunkCallback);
+
+						if (retVal)
+						{
+							break;
+						}
 					}
 				}
 			}
@@ -231,6 +234,9 @@ namespace isobus
 		update_internal_cfs();
 
 		prune_inactive_control_functions();
+
+		// Update transport protocols
+		transportProtocol.update({});
 
 		for (std::size_t i = 0; i < CANLibProtocol::get_number_protocols(); i++)
 		{

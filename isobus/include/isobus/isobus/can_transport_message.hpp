@@ -10,6 +10,7 @@
 #ifndef CAN_TRANSPORT_MESSAGE_HPP
 #define CAN_TRANSPORT_MESSAGE_HPP
 
+#include "isobus/isobus/can_callbacks.hpp"
 #include "isobus/isobus/can_control_function.hpp"
 #include "isobus/isobus/can_message.hpp"
 
@@ -108,7 +109,7 @@ namespace isobus
 		/// @brief Get the byte at the given index.
 		/// @param index The index of the byte to get.
 		/// @return The byte at the given index.
-		virtual std::uint8_t get_byte(std::size_t index) const = 0;
+		virtual std::uint8_t get_byte(std::size_t index) = 0;
 
 		/// @brief Set the byte at the given index.
 		/// @param index The index of the byte to set.
@@ -129,6 +130,22 @@ namespace isobus
 	  , public std::vector<std::uint8_t>
 	{
 	public:
+		/// @brief Construct a new CANTransportDataVector object.
+		/// @param size The size of the data.
+		explicit CANTransportDataVector(std::size_t size);
+
+		/// @brief Construct a new CANTransportDataVector object.
+		/// @param data The data to copy.
+		explicit CANTransportDataVector(const std::vector<std::uint8_t> &data);
+
+		/// @brief Construct a new CANTransportDataVector object.
+		/// @param data A pointer to the data to copy.
+		/// @param size The size of the data to copy.
+		CANTransportDataVector(const std::uint8_t *data, std::size_t size);
+
+		/// @brief Construct a new CANTransportDataVector object.
+		/// @param data The data to copy.
+
 		/// @brief Get the size of the data.
 		/// @return The size of the data.
 		std::size_t size() const override;
@@ -136,7 +153,7 @@ namespace isobus
 		/// @brief Get the byte at the given index.
 		/// @param index The index of the byte to get.
 		/// @return The byte at the given index.
-		std::uint8_t get_byte(std::size_t index) const override;
+		std::uint8_t get_byte(std::size_t index) override;
 
 		/// @brief Set the byte at the given index.
 		/// @param index The index of the byte to set.
@@ -170,7 +187,7 @@ namespace isobus
 		/// @brief Get the byte at the given index.
 		/// @param index The index of the byte to get.
 		/// @return The byte at the given index.
-		std::uint8_t get_byte(std::size_t index) const override;
+		std::uint8_t get_byte(std::size_t index) override;
 
 		/// @brief Set the byte at the given index.
 		/// @param index The index of the byte to set.
@@ -182,56 +199,50 @@ namespace isobus
 		DataSpan<uint8_t> data() override;
 	};
 
-	// //================================================================================================
-	// /// @class CANTransportDataCallback
-	// ///
-	// /// @brief A class that represents data of a CAN message by using a callback function.
-	// //================================================================================================
-	// class CANTransportDataCallback : public CANTransportData
-	// {
-	// public:
-	// 	/// @brief Construct a new CANTransportDataCallback object.
-	// 	/// @param size_callback The callback function to use for getting the size of the data.
-	// 	/// @param get_byte_callback The callback function to use for getting a byte of the data.
-	// 	/// @param set_byte_callback The callback function to use for setting a byte of the data.
-	// 	CANTransportDataCallback(std::size_t (*size_callback)(),
-	// 	                         std::uint8_t (*get_byte_callback)(int),
-	// 	                         void (*set_byte_callback)(int, std::uint8_t)) :
-	// 	  size_callback(size_callback),
-	// 	  get_byte_callback(get_byte_callback),
-	// 	  set_byte_callback(set_byte_callback)
-	// 	{
-	// 	}
+	//================================================================================================
+	/// @class CANTransportDataCallback
+	///
+	/// @brief A class that represents data of a CAN message by using a callback function.
+	//================================================================================================
+	class CANTransportDataCallback : public CANTransportData
+	{
+	public:
+		/// @brief Constructor for transport data that uses a callback function.
+		/// @param size The size of the data.
+		/// @param callback The callback function to be called for each data chunk.
+		/// @param parentPointer The parent object that owns this callback (optional).
+		/// @param chunkSize The size of each data chunk (optional, default is 7).
+		CANTransportDataCallback(std::size_t size,
+		                         DataChunkCallback callback,
+		                         void *parentPointer = nullptr,
+		                         std::size_t chunkSize = 7);
 
-	// 	/// @brief Get the size of the data.
-	// 	/// @return The size of the data.
-	// 	std::size_t size() const override
-	// 	{
-	// 		return size_callback();
-	// 	}
+		/// @brief Get the size of the data.
+		/// @return The size of the data.
+		std::size_t size() const override;
 
-	// 	/// @brief Get the byte at the given index.
-	// 	/// @param index The index of the byte to get.
-	// 	/// @return The byte at the given index.
-	// 	std::uint8_t get_byte(int index) const override
-	// 	{
-	// 		return get_byte_callback(index);
-	// 	}
+		/// @brief Get the byte at the given index.
+		/// @param index The index of the byte to get.
+		/// @return The byte at the given index.
+		std::uint8_t get_byte(std::size_t index) override;
 
-	// 	/// @brief Set the byte at the given index.
-	// 	/// @param index The index of the byte to set.
-	// 	/// @param value The value to set the byte to.
-	// 	void set_byte(int index, std::uint8_t value) override
-	// 	{
-	// 		set_byte_callback(index, value);
-	// 	}
+		/// @brief Set the byte at the given index.
+		/// @param index The index of the byte to set.
+		/// @param value The value to set the byte to.
+		void set_byte(std::size_t index, std::uint8_t value) override;
 
-	// 	/// @brief Get the data span.
-	// 	/// @return The data span.
-	// 	DataSpan<uint8_t> data() override
-	// 	{
-	// 		return DataSpan<uint8_t>(nullptr, 0);
-	// 	}
+		/// @brief Get the data span.
+		/// @return The data span.
+		DataSpan<uint8_t> data() override;
+
+	private:
+		std::size_t totalSize;
+		DataChunkCallback callback;
+		void *parentPointer;
+		std::vector<std::uint8_t> buffer;
+		std::size_t bufferSize;
+		std::size_t dataOffset = 0;
+	};
 
 	//================================================================================================
 	/// @class CANTransportMessage
@@ -287,6 +298,13 @@ namespace isobus
 		/// @brief Check if the message can continue to be transported.
 		/// @return true if the message can continue to be transported.
 		bool can_continue() const;
+
+		/// @brief Check if this message is from a specific source and destination.
+		/// @param source The source control function.
+		/// @param destination The destination control function.
+		/// @return true if this message is from the given source and destination.
+		bool matches(std::shared_ptr<ControlFunction> source,
+		             std::shared_ptr<ControlFunction> destination) const;
 
 	private:
 		std::uint32_t identifier;
