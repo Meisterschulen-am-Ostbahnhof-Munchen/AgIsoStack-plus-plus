@@ -469,6 +469,11 @@ namespace isobus
 		return retVal;
 	}
 
+	bool DataMask::change_soft_key_mask(std::uint16_t newMaskID)
+	{
+		return replace_only_child_of_type(newMaskID, VirtualTerminalObjectType::SoftKeyMask);
+	}
+
 	AlarmMask::AlarmMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
 	  VTObject(memberObjectPool, currentColourTable),
 	  softKeyMask(0),
@@ -620,6 +625,11 @@ namespace isobus
 	void AlarmMask::set_signal_priority(AcousticSignal value)
 	{
 		signalPriority = value;
+	}
+
+	bool AlarmMask::change_soft_key_mask(std::uint16_t newMaskID)
+	{
+		return replace_only_child_of_type(newMaskID, VirtualTerminalObjectType::SoftKeyMask);
 	}
 
 	Container::Container(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
@@ -1884,6 +1894,7 @@ namespace isobus
 
 	InputList::InputList(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
 	  VTObject(memberObjectPool, currentColourTable),
+	  variableReference(NULL_OBJECT_ID),
 	  numberOfListItems(0),
 	  optionsBitfield(0),
 	  value(0)
@@ -1953,8 +1964,8 @@ namespace isobus
 
 				case AttributeName::VariableReference:
 				{
-					returnedError = AttributeError::AnyOtherError;
-					retVal = replace_only_child_of_type(static_cast<std::uint16_t>(rawAttributeData), VirtualTerminalObjectType::NumberVariable);
+					set_variable_reference(static_cast<std::uint16_t>(rawAttributeData));
+					retVal = true;
 				}
 				break;
 
@@ -2016,6 +2027,31 @@ namespace isobus
 	void InputList::set_value(std::uint8_t inputValue)
 	{
 		value = inputValue;
+	}
+
+	bool InputList::change_list_item(std::uint8_t index, std::uint16_t newListItem)
+	{
+		bool retVal = false;
+
+		if ((index < children.size()) &&
+		    ((NULL_OBJECT_ID == newListItem) ||
+		     ((nullptr != thisObjectPool[newListItem]) &&
+		      (VirtualTerminalObjectType::NumberVariable == thisObjectPool[newListItem]->get_object_type()))))
+		{
+			children.at(index).id = newListItem;
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	void InputList::set_variable_reference(std::uint16_t referencedObjectID)
+	{
+		variableReference = referencedObjectID;
+	}
+
+	std::uint16_t InputList::get_variable_reference() const
+	{
+		return variableReference;
 	}
 
 	OutputString::OutputString(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
@@ -2424,6 +2460,7 @@ namespace isobus
 
 	OutputList::OutputList(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :
 	  VTObject(memberObjectPool, currentColourTable),
+	  variableReference(NULL_OBJECT_ID),
 	  numberOfListItems(0),
 	  value(0)
 	{
@@ -2531,6 +2568,31 @@ namespace isobus
 	void OutputList::set_value(std::uint8_t aValue)
 	{
 		value = aValue;
+	}
+
+	bool OutputList::change_list_item(std::uint8_t index, std::uint16_t newListItem)
+	{
+		bool retVal = false;
+
+		if ((index < children.size()) &&
+		    ((NULL_OBJECT_ID == newListItem) ||
+		     ((nullptr != thisObjectPool[newListItem]) &&
+		      (VirtualTerminalObjectType::NumberVariable == thisObjectPool[newListItem]->get_object_type()))))
+		{
+			children.at(index).id = newListItem;
+			retVal = true;
+		}
+		return retVal;
+	}
+
+	void OutputList::set_variable_reference(std::uint16_t referencedObjectID)
+	{
+		variableReference = referencedObjectID;
+	}
+
+	std::uint16_t OutputList::get_variable_reference() const
+	{
+		return variableReference;
 	}
 
 	OutputLine::OutputLine(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable) :

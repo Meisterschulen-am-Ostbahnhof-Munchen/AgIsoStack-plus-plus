@@ -384,6 +384,11 @@ namespace isobus
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
 		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
+		/// @brief Changes the soft key mask associated to this data mask to a new object ID
+		/// @param[in] newMaskID The object ID of the new soft key mask to associate with this data mask
+		/// @returns True if the mask was changed, false if the new ID was not valid and the mask was not changed
+		bool change_soft_key_mask(std::uint16_t newMaskID);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 12; ///< The fewest bytes of IOP data that can represent this object
 	};
@@ -467,6 +472,11 @@ namespace isobus
 		/// @details Controls how aggressive the beep is on VTs with a speaker or whistle chip.
 		/// @param value The acoustic signal priority to set
 		void set_signal_priority(AcousticSignal value);
+
+		/// @brief Changes the soft key mask associated to this alarm mask to a new object ID
+		/// @param[in] newMaskID The object ID of the new soft key mask to associate with this alarm mask
+		/// @returns True if the mask was changed, false if the new ID was not valid and the mask was not changed
+		bool change_soft_key_mask(std::uint16_t newMaskID);
 
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
@@ -1285,9 +1295,25 @@ namespace isobus
 		/// @param[in] inputValue The new value for the selected list index
 		void set_value(std::uint8_t inputValue);
 
+		/// @brief A dedicated way to set the stored variable reference so we don't have
+		/// to worry about the child object list getting messed up from changing the attribute
+		/// or a list item.
+		/// @param[in] referencedObjectID The object ID of a number variable to set as the value reference
+		void set_variable_reference(std::uint16_t referencedObjectID);
+
+		/// @brief Returns the variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
+		std::uint16_t get_variable_reference() const;
+
+		/// @brief Changes a list item to a new ID by index
+		/// @param[in] index The index to change (starting from 0)
+		/// @param[in] newListItem The object ID to use as the new list item at the specified index
+		/// @returns True if the operation was successful, otherwise false (perhaps the index is out of bounds?)
+		bool change_list_item(std::uint8_t index, std::uint16_t newListItem);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 13; ///< The fewest bytes of IOP data that can represent this object
 
+		std::uint16_t variableReference;
 		std::uint8_t numberOfListItems; ///< Number of object references to follow. The size of the list can never exceed this number and this attribute cannot be changed.
 		std::uint8_t optionsBitfield; ///< Options byte
 		std::uint8_t value; ///< Selected list index of this object. Used only if variable reference attribute is NULL
@@ -1619,9 +1645,25 @@ namespace isobus
 		/// @param[in] value The value to set for the list's selected index
 		void set_value(std::uint8_t value);
 
+		/// @brief A dedicated way to set the stored variable reference so we don't have
+		/// to worry about the child object list getting messed up from changing the attribute
+		/// or a list item.
+		/// @param[in] referencedObjectID The object ID of a number variable to set as the value reference
+		void set_variable_reference(std::uint16_t referencedObjectID);
+
+		/// @brief Returns the variable reference, which is an object ID of a number variable or NULL_OBJECT_ID (0xFFFF)
+		std::uint16_t get_variable_reference() const;
+
+		/// @brief Changes a list item to a new ID by index
+		/// @param[in] index The index to change (starting from 0)
+		/// @param[in] newListItem The object ID to use as the new list item at the specified index
+		/// @returns True if the operation was successful, otherwise false (perhaps the index is out of bounds?)
+		bool change_list_item(std::uint8_t index, std::uint16_t newListItem);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 12; ///< The fewest bytes of IOP data that can represent this object
 
+		std::uint16_t variableReference; ///< The object ID of a number variable to use for the value/selected index, or NULL_OBJECT_ID
 		std::uint8_t numberOfListItems; ///< Number of object references to follow. The size of the list can never exceed this number and this attribute cannot be changed.
 		std::uint8_t value; ///< Selected list index of this object. Used only if variable reference attribute is NULL
 	};
