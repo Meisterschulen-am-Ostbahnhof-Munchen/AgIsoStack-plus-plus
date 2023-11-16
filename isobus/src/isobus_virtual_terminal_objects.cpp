@@ -1557,12 +1557,12 @@ namespace isobus
 
 	InputString::HorizontalJustification InputString::get_horizontal_justification() const
 	{
-		return static_cast<HorizontalJustification>(justificationBitfield & 0x0F);
+		return static_cast<HorizontalJustification>(justificationBitfield & 0x03);
 	}
 
 	InputString::VerticalJustification InputString::get_vertical_justification() const
 	{
-		return static_cast<VerticalJustification>((justificationBitfield >> 4) & 0x0F);
+		return static_cast<VerticalJustification>((justificationBitfield >> 2) & 0x03);
 	}
 
 	void InputString::set_justification_bitfield(std::uint8_t value)
@@ -1765,12 +1765,12 @@ namespace isobus
 
 	InputNumber::HorizontalJustification InputNumber::get_horizontal_justification() const
 	{
-		return static_cast<HorizontalJustification>(justificationBitfield & 0x0F);
+		return static_cast<HorizontalJustification>(justificationBitfield & 0x03);
 	}
 
 	InputNumber::VerticalJustification InputNumber::get_vertical_justification() const
 	{
-		return static_cast<VerticalJustification>((justificationBitfield >> 4) & 0x0F);
+		return static_cast<VerticalJustification>((justificationBitfield >> 2) & 0x03);
 	}
 
 	void InputNumber::set_justification_bitfield(std::uint8_t value)
@@ -2248,12 +2248,12 @@ namespace isobus
 
 	OutputString::HorizontalJustification OutputString::get_horizontal_justification() const
 	{
-		return static_cast<HorizontalJustification>(justificationBitfield & 0x0F);
+		return static_cast<HorizontalJustification>(justificationBitfield & 0x03);
 	}
 
 	OutputString::VerticalJustification OutputString::get_vertical_justification() const
 	{
-		return static_cast<VerticalJustification>((justificationBitfield >> 4) & 0x0F);
+		return static_cast<VerticalJustification>((justificationBitfield >> 2) & 0x03);
 	}
 
 	void OutputString::set_justification_bitfield(std::uint8_t value)
@@ -2447,12 +2447,12 @@ namespace isobus
 
 	OutputNumber::HorizontalJustification OutputNumber::get_horizontal_justification() const
 	{
-		return static_cast<HorizontalJustification>(justificationBitfield & 0x0F);
+		return static_cast<HorizontalJustification>(justificationBitfield & 0x03);
 	}
 
 	OutputNumber::VerticalJustification OutputNumber::get_vertical_justification() const
 	{
-		return static_cast<VerticalJustification>((justificationBitfield >> 4) & 0x0F);
+		return static_cast<VerticalJustification>((justificationBitfield >> 2) & 0x03);
 	}
 
 	void OutputNumber::set_justification_bitfield(std::uint8_t value)
