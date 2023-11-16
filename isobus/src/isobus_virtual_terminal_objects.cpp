@@ -1915,16 +1915,32 @@ namespace isobus
 	{
 		bool anyWrongChildType = false;
 
-		for (auto &child : children)
+		for (const auto &child : children)
 		{
 			auto childObject = get_object_by_id(child.id);
 			if (nullptr != childObject)
 			{
 				switch (childObject->get_object_type())
 				{
-					case VirtualTerminalObjectType::NumberVariable:
+					case VirtualTerminalObjectType::WorkingSet:
+					case VirtualTerminalObjectType::Container:
 					case VirtualTerminalObjectType::OutputString:
+					case VirtualTerminalObjectType::OutputNumber:
+					case VirtualTerminalObjectType::OutputList:
+					case VirtualTerminalObjectType::OutputLine:
+					case VirtualTerminalObjectType::OutputRectangle:
+					case VirtualTerminalObjectType::OutputEllipse:
+					case VirtualTerminalObjectType::OutputPolygon:
+					case VirtualTerminalObjectType::OutputMeter:
+					case VirtualTerminalObjectType::OutputLinearBarGraph:
+					case VirtualTerminalObjectType::OutputArchedBarGraph:
+					case VirtualTerminalObjectType::GraphicsContext:
+					case VirtualTerminalObjectType::PictureGraphic:
+					case VirtualTerminalObjectType::ScaledGraphic:
+					case VirtualTerminalObjectType::ObjectPointer:
+					case VirtualTerminalObjectType::ExternalObjectPointer:
 					{
+						// Valid objects
 					}
 					break;
 
@@ -2035,11 +2051,47 @@ namespace isobus
 
 		if ((index < children.size()) &&
 		    ((NULL_OBJECT_ID == newListItem) ||
-		     ((nullptr != thisObjectPool[newListItem]) &&
-		      (VirtualTerminalObjectType::NumberVariable == thisObjectPool[newListItem]->get_object_type()))))
+		     (nullptr != thisObjectPool[newListItem])))
 		{
-			children.at(index).id = newListItem;
-			retVal = true;
+			if (nullptr != thisObjectPool[newListItem])
+			{
+				switch (thisObjectPool[newListItem]->get_object_type())
+				{
+					case VirtualTerminalObjectType::WorkingSet:
+					case VirtualTerminalObjectType::Container:
+					case VirtualTerminalObjectType::OutputString:
+					case VirtualTerminalObjectType::OutputNumber:
+					case VirtualTerminalObjectType::OutputList:
+					case VirtualTerminalObjectType::OutputLine:
+					case VirtualTerminalObjectType::OutputRectangle:
+					case VirtualTerminalObjectType::OutputEllipse:
+					case VirtualTerminalObjectType::OutputPolygon:
+					case VirtualTerminalObjectType::OutputMeter:
+					case VirtualTerminalObjectType::OutputLinearBarGraph:
+					case VirtualTerminalObjectType::OutputArchedBarGraph:
+					case VirtualTerminalObjectType::GraphicsContext:
+					case VirtualTerminalObjectType::PictureGraphic:
+					case VirtualTerminalObjectType::ScaledGraphic:
+					case VirtualTerminalObjectType::ObjectPointer:
+					case VirtualTerminalObjectType::ExternalObjectPointer:
+					{
+						children.at(index).id = newListItem;
+						retVal = true;
+					}
+					break;
+
+					default:
+					{
+						// Invalid child object type
+					}
+					break;
+				}
+			}
+			else
+			{
+				children.at(index).id = newListItem;
+				retVal = true;
+			}
 		}
 		return retVal;
 	}
