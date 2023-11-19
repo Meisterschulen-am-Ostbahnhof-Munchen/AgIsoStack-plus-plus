@@ -3999,7 +3999,7 @@ namespace isobus
 
 				case AttributeName::Options:
 				{
-					set_options(static_cast<std::uint16_t>(rawAttributeData));
+					set_options(static_cast<std::uint8_t>(rawAttributeData));
 					retVal = true;
 				}
 				break;

@@ -503,7 +503,6 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t softKeyMask = NULL_OBJECT_ID; ///< Object ID of a soft key mask for this alarm mask, or the null ID
 		Priority maskPriority = Priority::High; ///< The priority of this mask
 		AcousticSignal signalPriority = AcousticSignal::Highest; ///< The acoustic signal priority for this mask
 	};
@@ -1053,7 +1052,6 @@ namespace isobus
 		std::string stringValue; ///< The actual string. Used only if variable reference attribute is NULL. Pad with spaces as necessary to satisfy length attribute.
 		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
 		std::uint8_t justificationBitfield = 0; ///< Bitfield of justification options
-		std::uint8_t length = 0; ///< Maximum fixed length of the Input String object value in bytes. This may be set to 0 if a variable reference is used
 		bool enabled = false; ///< If the string is interactable
 	};
 
@@ -1487,7 +1485,6 @@ namespace isobus
 		std::string stringValue; ///< The actual string. Used only if variable reference attribute is NULL. Pad with spaces as necessary to satisfy length attribute.
 		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
 		std::uint8_t justificationBitfield = 0; ///< Bitfield of justification options
-		std::uint8_t length = 0; ///< Maximum fixed length of the Input String object value in bytes. This may be set to 0 if a variable reference is used
 	};
 
 	/// @brief This object is used to format and output a numeric value based on a supplied integer value.
