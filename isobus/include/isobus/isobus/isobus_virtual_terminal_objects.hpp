@@ -92,27 +92,45 @@ namespace isobus
 	class VTColourVector
 	{
 	public:
-		float r, g, b;
+		float r; ///< Red value for a pixel, range 0.0f to 1.0f
+		float g; ///< Green value for a pixel, range 0.0f to 1.0f
+		float b; ///< Blue value for a pixel, range 0.0f to 1.0f
+
+		/// @brief Default constructor for a VT Colour, which produces the colour black
 		constexpr VTColourVector() :
 		  r(0.0f), g(0.0f), b(0.0f) {}
-		constexpr VTColourVector(float _r, float _g, float _b) :
-		  r(_r), g(_g), b(_b) {}
+
+		/// @brief Constructor for a VT Colour which initializes to an arbitrary colour
+		/// @param[in] red The red value for a pixel, range 0.0f to 1.0f
+		/// @param[in] green The green value for a pixel, range 0.0f to 1.0f
+		/// @param[in] blue The blue value for a pixel, range 0.0f to 1.0f
+		constexpr VTColourVector(float red, float green, float blue) :
+		  r(red), g(green), b(blue) {}
 	};
 
 	/// @brief An object that represents the VT's active colour table
 	class VTColourTable
 	{
 	public:
+		/// @brief Constructor for a VT colour table
 		VTColourTable();
 
-		VTColourVector get_colour(std::uint8_t colorIndex) const;
+		/// @brief Returns the colour vector associated to the specified VT colour index, which
+		/// is what gets provided normally in most VT CAN messages, so this essentially maps the index
+		/// to an actually usable colour definition.
+		/// @param[in] colourIndex The VT colour index to retrieve
+		/// @returns An RGB colour vector associated to the specified VT colour index
+		VTColourVector get_colour(std::uint8_t colourIndex) const;
 
-		void set_colour(std::uint8_t colorIndex, VTColourVector newColour);
+		/// @brief Sets the specified VT colour index to a new RGB colour value
+		/// @param[in] colourIndex The VT colour index to modify
+		/// @param[in] newColour The RGB colour to set the specified index to
+		void set_colour(std::uint8_t colourIndex, VTColourVector newColour);
 
 	private:
-		static constexpr std::size_t VT_COLOUR_TABLE_SIZE = 256;
+		static constexpr std::size_t VT_COLOUR_TABLE_SIZE = 256; ///< The size of the VT colour table as specified in ISO11783-6
 
-		std::array<VTColourVector, VT_COLOUR_TABLE_SIZE> colourTable; ///< Colour table data
+		std::array<VTColourVector, VT_COLOUR_TABLE_SIZE> colourTable; ///< Colour table data. Associates VT colour index with RGB value.
 	};
 
 	static constexpr std::uint16_t NULL_OBJECT_ID = 0xFFFF; ///< The NULL Object ID, usually drawn as blank space
@@ -131,7 +149,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a generic VT object. Sets up default values and the pointer to the member object pool
-		/// @param[in] memberObjectPool a pointer to the object tree that this object will be a member of
+		/// @param[in] memberObjectPool a reference to the object tree that this object will be a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		VTObject(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -228,15 +247,15 @@ namespace isobus
 		/// @param[in] xOffset The relative amount to offset the object(s) by in the X axis
 		/// @param[in] yOffset The relative amount to offset the object(s) by in the Y axis
 		/// @returns true if any child matched the specified object ID, otherwise false if no children were found with the specified ID.
-		bool offset_all_children_x_with_id(std::uint16_t childObjectID, std::int8_t xOffset, std::int8_t yOffset);
+		bool offset_all_children_with_id(std::uint16_t childObjectID, std::int8_t xOffset, std::int8_t yOffset);
 
 		/// @brief Removes an object reference from another object. All fields must exactly match for the object to be removed.
 		/// This is because objects can have multiple of the same child at different places, so we can't infer which one to
 		/// remove without the exact position.
-		/// @param[in] objectID The object ID of the child to remove
+		/// @param[in] objectIDToRemove The object ID of the child to remove
 		/// @param[in] relativeXLocation The X offset of this object to its parent
 		/// @param[in] relativeYLocation The Y offset of this object to its parent
-		void remove_child(std::uint16_t objectID, std::int16_t relativeXLocation, std::int16_t relativeYLocation);
+		void remove_child(std::uint16_t objectIDToRemove, std::int16_t relativeXLocation, std::int16_t relativeYLocation);
 
 		/// @brief Removes the last added child object.
 		/// This is meant to be a faster way to deal with objects that only have a max of 1 child.
@@ -248,7 +267,7 @@ namespace isobus
 		{
 		public:
 			/// @brief Default constructor for child object data with default values
-			ChildObjectData();
+			ChildObjectData() = default;
 
 			/// @brief Constructor that initializes all members with parameters
 			/// @param[in] objectId The object ID of this child object
@@ -257,9 +276,9 @@ namespace isobus
 			ChildObjectData(std::uint16_t objectId,
 			                std::int16_t x,
 			                std::int16_t y);
-			std::uint16_t id; ///< Object identifier. Shall be unique within the object pool.
-			std::int16_t xLocation; ///< Relative X location of the top left corner of the object
-			std::int16_t yLocation; ///< Relative Y location of the top left corner of the object
+			std::uint16_t id = NULL_OBJECT_ID; ///< Object identifier. Shall be unique within the object pool.
+			std::int16_t xLocation = 0; ///< Relative X location of the top left corner of the object
+			std::int16_t yLocation = 0; ///< Relative Y location of the top left corner of the object
 		};
 
 		/// @brief A helper function to swap a child object of specified type with a new object.
@@ -296,7 +315,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a working set object
-		/// @param[in] parentObjectPool A pointer to the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		WorkingSet(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -340,8 +360,8 @@ namespace isobus
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 18; ///< The fewest bytes of IOP data that can represent this object
 
 		std::vector<std::string> languageCodes; ///< A list of 2 character language codes, like "en"
-		std::uint16_t activeMask; ///< The currently active mask for this working set
-		bool selectable; ///< If this working set is selectable right now
+		std::uint16_t activeMask = NULL_OBJECT_ID; ///< The currently active mask for this working set
+		bool selectable = false; ///< If this working set is selectable right now
 	};
 
 	/// @brief The Data Mask describes the objects that will appear in the Data Mask area of the physical display.
@@ -360,7 +380,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a data mask object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		DataMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -429,7 +450,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a alarm mask object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		AlarmMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -481,9 +503,9 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t softKeyMask; ///< Object ID of a soft key mask for this alarm mask, or the null ID
-		Priority maskPriority; ///< The priority of this mask
-		AcousticSignal signalPriority; ///< The acoustic signal priority for this mask
+		std::uint16_t softKeyMask = NULL_OBJECT_ID; ///< Object ID of a soft key mask for this alarm mask, or the null ID
+		Priority maskPriority = Priority::High; ///< The priority of this mask
+		AcousticSignal signalPriority = AcousticSignal::Highest; ///< The acoustic signal priority for this mask
 	};
 
 	/// @brief The Container object is used to group objects for the purpose of moving, hiding or sharing the group.
@@ -505,7 +527,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a container object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		Container(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -540,7 +563,7 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 9; ///< The fewest bytes of IOP data that can represent this object
 
-		bool hidden; ///< The hidden attribute state for this container object. True means it will be hidden when rendered.
+		bool hidden = false; ///< The hidden attribute state for this container object. True means it will be hidden when rendered.
 	};
 
 	/// @brief The Soft Key Mask is a Container object that contains Key objects, Object Pointer objects, or External Object
@@ -561,7 +584,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a soft key mask object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		SoftKeyMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -606,7 +630,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a key object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		Key(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -641,7 +666,7 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 7; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint8_t keyCode; ///< They key code associated with events from this key object
+		std::uint8_t keyCode = 0; ///< They key code associated with events from this key object
 	};
 
 	/// @brief The Key objects contained in this object shall be a grouping of Key objects, or Object Pointers to Key objects
@@ -667,7 +692,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a key group object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		KeyGroup(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -713,13 +739,26 @@ namespace isobus
 		/// @param[in] value The new value of the option bit
 		void set_option(Options option, bool value);
 
+		/// @brief Sets the Object ID of an Output String object or	an Object Pointer object
+		/// that points to an Output String object that contains a name for this object
+		/// @returns Object ID of an Output String object or an Object Pointer object that will represent the name of this key group
+		std::uint16_t get_name_object_id() const;
+
+		/// @brief Sets the Object ID of an Output String object or	an Object Pointer object
+		/// that points to an Output String object that contains a name for this object
+		/// @param[in] value The object ID of the object that will represent the name of this key group, CANNOT BE the null object ID
+		void set_name_object_id(std::uint16_t value);
+
 		static constexpr std::uint8_t MAX_CHILD_KEYS = 4; ///< There shall be a max of 4 keys per group according to the standard
 
 	private:
+		bool validate_name(std::uint16_t nameIDToValidate) const; ///< Validates that the specified name ID is valid for this object
+
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 10; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t keyGroupIcon; ///< The VT may use	this in the proprietary mapping screen to represent the key group
-		std::uint8_t optionsBitfield; ///< Bitfield of options defined in `Options` enum
+		std::uint16_t keyGroupIcon = NULL_OBJECT_ID; ///< The VT may use this in the proprietary mapping screen to represent the key group
+		std::uint16_t nameID = NULL_OBJECT_ID; ///< Object ID of a string variable that contains the name of the key group
+		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
 	};
 
 	/// @brief The Button object defines a button control.
@@ -757,7 +796,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a button object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		Button(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -814,9 +854,9 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 13; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint8_t borderColour; ///< Border colour.
-		std::uint8_t keyCode; ///< Key code assigned by ECU. VT reports this code in the Button Activation message.
-		std::uint8_t optionsBitfield; ///< Bitfield of options defined in `Options` enum
+		std::uint8_t borderColour = 0; ///< Border colour.
+		std::uint8_t keyCode = 0; ///< Key code assigned by ECU. VT reports this code in the Button Activation message.
+		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
 	};
 
 	/// @brief The Input Boolean object is used to input a TRUE/FALSE type indication from the operator
@@ -839,7 +879,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an input boolean object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		InputBoolean(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -878,14 +919,14 @@ namespace isobus
 		bool get_enabled() const;
 
 		/// @brief Sets the enabled attribute on this object to a new value
-		/// @param[in] value The new state for the enabled attribute for this object
-		void set_enabled(bool value);
+		/// @param[in] isEnabled The new state for the enabled attribute for this object
+		void set_enabled(bool isEnabled);
 
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 13; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint8_t value; ///< Used only if it has no number variable child object
-		bool enabled; ///< If the bool is interactable
+		std::uint8_t value = 0; ///< Used only if it has no number variable child object
+		bool enabled = false; ///< If the bool is interactable
 	};
 
 	/// @brief This object is used to input a character string from the operator
@@ -937,7 +978,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a input string object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		InputString(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -1009,10 +1051,10 @@ namespace isobus
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 19; ///< The fewest bytes of IOP data that can represent this object
 
 		std::string stringValue; ///< The actual string. Used only if variable reference attribute is NULL. Pad with spaces as necessary to satisfy length attribute.
-		std::uint8_t optionsBitfield; ///< Bitfield of options defined in `Options` enum
-		std::uint8_t justificationBitfield; ///< Bitfield of justification options
-		std::uint8_t length; ///< Maximum fixed length of the Input String object value in bytes. This may be set to 0 if a variable reference is used
-		bool enabled; ///< If the string is interactable
+		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
+		std::uint8_t justificationBitfield = 0; ///< Bitfield of justification options
+		std::uint8_t length = 0; ///< Maximum fixed length of the Input String object value in bytes. This may be set to 0 if a variable reference is used
+		bool enabled = false; ///< If the string is interactable
 	};
 
 	/// @brief This object is used to format, display and change a numeric value based on a supplied integer value.
@@ -1079,7 +1121,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an input number object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		InputNumber(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -1113,7 +1156,7 @@ namespace isobus
 
 		/// @brief Sets the justification bitfield of the input number
 		/// @param[in] value The justification bitfield to set
-		void set_justification_bitfield(std::uint8_t value);
+		void set_justification_bitfield(std::uint8_t newJustification);
 
 		/// @brief Returns the scale factor that is applied to the value of the input number
 		/// @returns The scale factor that is applied to the value of the input number
@@ -1121,7 +1164,7 @@ namespace isobus
 
 		/// @brief Sets the scale factor that is applied to the value of the input number
 		/// @param[in] value The scale factor to set
-		void set_scale(float value);
+		void set_scale(float newScale);
 
 		/// @brief Returns the maximum value for the input number
 		/// @details The VT shall not accept values higher than this for this input number's value
@@ -1131,7 +1174,7 @@ namespace isobus
 		/// @brief Sets the maximum value for the input number
 		/// @details The VT shall not accept values higher than this for this input number's value
 		/// @param[in] value The maximum value for the input number
-		void set_maximum_value(std::uint32_t value);
+		void set_maximum_value(std::uint32_t newMax);
 
 		/// @brief Returns the minimum value for this input number
 		/// @details The VT shall not accept values smaller than this value for this input number
@@ -1141,7 +1184,7 @@ namespace isobus
 		/// @brief Sets the minimum value for the input number
 		/// @details The VT shall not accept values smaller than this value for this input number
 		/// @param[in] value The minimum value to set for the input number
-		void set_minimum_value(std::uint32_t value);
+		void set_minimum_value(std::uint32_t newMin);
 
 		/// @brief Returns the offset that will be applied to the number's value when it is displayed
 		/// @returns The offset that will be applied to the number's value when it is displayed
@@ -1149,7 +1192,7 @@ namespace isobus
 
 		/// @brief Sets the offset that will be applied to the number's value when it is displayed
 		/// @param[in] value The new offset that will be applied to the number's value when it is displayed
-		void set_offset(std::int32_t value);
+		void set_offset(std::int32_t newOffset);
 
 		/// @brief Returns the number of decimals to display when rendering this input number
 		/// @returns The number of decimals to display when rendering the input number
@@ -1157,7 +1200,7 @@ namespace isobus
 
 		/// @brief Sets the number of decimals to display when rendering this number
 		/// @param[in] value The number of decimals to display
-		void set_number_of_decimals(std::uint8_t value);
+		void set_number_of_decimals(std::uint8_t newDecimals);
 
 		/// @brief Returns if the format option is set for this input number
 		/// @details The format option determines if the value is shown in fixed decimal or exponential form.
@@ -1169,7 +1212,7 @@ namespace isobus
 		/// @details The format option determines if the value is shown in fixed decimal or exponential form.
 		/// A value of `true` means fixed decimal (####.nn), and `false` means exponential ([−]###.nnE[+/−]##)
 		/// @param[in] value The format value to set. `true` for fixed decimal, false for exponential.
-		void set_format(bool value);
+		void set_format(bool newFormat);
 
 		/// @brief Returns the state of a single option in the object's option bitfield
 		/// @param[in] option The option to check the value of in the object's option bitfield
@@ -1178,26 +1221,26 @@ namespace isobus
 
 		/// @brief Sets the options bitfield for this object to a new value
 		/// @param[in] value The new value for the options bitfield
-		void set_options(std::uint8_t value);
+		void set_options(std::uint8_t newOptions);
 
 		/// @brief Sets a single option in the options bitfield to the specified value
 		/// @param[in] option The option to set
 		/// @param[in] value The new value of the option bit
-		void set_option(Options option, bool value);
+		void set_option(Options option, bool newOption);
 
 		/// @brief Returns the state of a single option in the object's second option bitfield
 		/// @param[in] option The option to check the value of in the object's second option bitfield
 		/// @returns The state of the associated option bit
-		bool get_option2(Options2 option) const;
+		bool get_option2(Options2 newOption) const;
 
 		/// @brief Sets the second options bitfield for this object to a new value
 		/// @param[in] value The new value for the second options bitfield
-		void set_options2(std::uint8_t value);
+		void set_options2(std::uint8_t newOptions);
 
 		/// @brief Sets a single option in the second options bitfield to the specified value
 		/// @param[in] option The option to set
 		/// @param[in] value The new value of the option bit
-		void set_option2(Options2 option, bool value);
+		void set_option2(Options2 option, bool newOption);
 
 		/// @brief Returns the value of the input number (only matters if there's no child number variable object).
 		/// @returns The value of the input number
@@ -1210,16 +1253,16 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 38; ///< The fewest bytes of IOP data that can represent this object
 
-		float scale; ///< Scale to be applied to the input value and min/max values.
-		std::uint32_t maximumValue; ///< Raw maximum value for the input
-		std::uint32_t minimumValue; ///< Raw minimum value for the input before scaling
-		std::uint32_t value; ///< The raw value of the object, used if no number variable child has been set
-		std::int32_t offset; ///< Offset to be applied to the input value and min/max values
-		std::uint8_t numberOfDecimals; ///< Specifies number of decimals to display after the decimal point
-		std::uint8_t options; ///< Options byte 1
-		std::uint8_t options2; ///< Options byte 2
-		std::uint8_t justificationBitfield; ///< Indicates how the number is positioned in the field defined by height and width
-		bool format; ///< 0 = use fixed format decimal display (####.nn), 1 = use exponential format ([-]###.nnE[+/-]##) where n is set by the number of decimals
+		float scale = 0.0f; ///< Scale to be applied to the input value and min/max values.
+		std::uint32_t maximumValue = 0; ///< Raw maximum value for the input
+		std::uint32_t minimumValue = 0; ///< Raw minimum value for the input before scaling
+		std::uint32_t value = 0; ///< The raw value of the object, used if no number variable child has been set
+		std::int32_t offset = 0; ///< Offset to be applied to the input value and min/max values
+		std::uint8_t numberOfDecimals = 0; ///< Specifies number of decimals to display after the decimal point
+		std::uint8_t options = 0; ///< Options byte 1
+		std::uint8_t options2 = 0; ///< Options byte 2
+		std::uint8_t justificationBitfield = 0; ///< Indicates how the number is positioned in the field defined by height and width
+		bool format = false; ///< 0 = use fixed format decimal display (####.nn), 1 = use exponential format ([-]###.nnE[+/-]##) where n is set by the number of decimals
 	};
 
 	/// @brief The Input List object is used to show one object out of a set of objects,
@@ -1249,7 +1292,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an input list object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		InputList(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -1280,7 +1324,7 @@ namespace isobus
 
 		/// @brief Sets the options bitfield for this object to a new value
 		/// @param[in] value The new value for the options bitfield
-		void set_options(std::uint8_t value);
+		void set_options(std::uint8_t options);
 
 		/// @brief Sets a single option in the options bitfield to the specified value
 		/// @param[in] option The option to set
@@ -1310,13 +1354,25 @@ namespace isobus
 		/// @returns True if the operation was successful, otherwise false (perhaps the index is out of bounds?)
 		bool change_list_item(std::uint8_t index, std::uint16_t newListItem);
 
+		/// @brief Returns the number of items in the list
+		/// @note This is not the number of children, it's the number of allocated
+		/// list items. The number of children can be less than this number.
+		/// @returns The number of items in the list
+		std::uint8_t get_number_of_list_items() const;
+
+		/// @brief Sets the number of items in the list
+		/// @note This is not the number of children, it's the number of allocated
+		/// list items. The number of children can be less than this number.
+		/// @param[in] value The number of items in the list
+		void set_number_of_list_items(std::uint8_t value);
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 13; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t variableReference;
-		std::uint8_t numberOfListItems; ///< Number of object references to follow. The size of the list can never exceed this number and this attribute cannot be changed.
-		std::uint8_t optionsBitfield; ///< Options byte
-		std::uint8_t value; ///< Selected list index of this object. Used only if variable reference attribute is NULL
+		std::uint16_t variableReference = NULL_OBJECT_ID; ///< Stores the object ID of a number variable that will be used as the value, or the NULL_OBJECT_ID if not used.
+		std::uint8_t numberOfListItems = 0; ///< Number of object references to follow. The size of the list can never exceed this number and this attribute cannot be changed.
+		std::uint8_t optionsBitfield = 0; ///< Options byte
+		std::uint8_t value = 0; ///< Selected list index of this object. Used only if variable reference attribute is NULL
 	};
 
 	/// @brief This object is used to output a string of text
@@ -1366,7 +1422,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output string object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		OutputString(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -1422,15 +1479,15 @@ namespace isobus
 
 		/// @brief Sets the value of the string (only matters if it has no child string variable)
 		/// @param[in] value The new value for the string
-		void set_value(std::string value);
+		void set_value(const std::string &value);
 
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 16; ///< The fewest bytes of IOP data that can represent this object
 
 		std::string stringValue; ///< The actual string. Used only if variable reference attribute is NULL. Pad with spaces as necessary to satisfy length attribute.
-		std::uint8_t optionsBitfield; ///< Bitfield of options defined in `Options` enum
-		std::uint8_t justificationBitfield; ///< Bitfield of justification options
-		std::uint8_t length; ///< Maximum fixed length of the Input String object value in bytes. This may be set to 0 if a variable reference is used
+		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
+		std::uint8_t justificationBitfield = 0; ///< Bitfield of justification options
+		std::uint8_t length = 0; ///< Maximum fixed length of the Input String object value in bytes. This may be set to 0 if a variable reference is used
 	};
 
 	/// @brief This object is used to format and output a numeric value based on a supplied integer value.
@@ -1485,7 +1542,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output number object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		OutputNumber(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -1582,13 +1640,13 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 29; ///< The fewest bytes of IOP data that can represent this object
 
-		float scale; ///< Scale to be applied to the input value and min/max values.
-		std::int32_t offset; ///< Offset to be applied to the input value and min/max values
-		std::uint32_t value; ///< Raw unsigned value of the output field before scaling (unsigned 32-bit integer). Used only if variable reference attribute is NULL
-		std::uint8_t numberOfDecimals; ///< Specifies number of decimals to display after the decimal point
-		std::uint8_t optionsBitfield; ///< Bitfield of options defined in `Options` enum
-		std::uint8_t justificationBitfield; ///< Bitfield of justification options
-		bool format; ///< 0 = use fixed format decimal display (####.nn), 1 = use exponential format ([-]###.nnE[+/-]##) where n is set by the number of decimals
+		float scale = 1.0f; ///< Scale to be applied to the input value and min/max values.
+		std::int32_t offset = 0; ///< Offset to be applied to the input value and min/max values
+		std::uint32_t value = 0; ///< Raw unsigned value of the output field before scaling (unsigned 32-bit integer). Used only if variable reference attribute is NULL
+		std::uint8_t numberOfDecimals = 0; ///< Specifies number of decimals to display after the decimal point
+		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
+		std::uint8_t justificationBitfield = 0; ///< Bitfield of justification options
+		bool format = false; ///< 0 = use fixed format decimal display (####.nn), 1 = use exponential format ([-]###.nnE[+/-]##) where n is set by the number of decimals
 	};
 
 	/// @brief Used to show one object out of a set of objects
@@ -1609,7 +1667,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output list object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		OutputList(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -1634,8 +1693,16 @@ namespace isobus
 		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
 		/// @brief Returns the number of items in the list
+		/// @note This is not the number of children, it's the number of allocated
+		/// list items. The number of children can be less than this number.
 		/// @returns The number of items in the list
 		std::uint8_t get_number_of_list_items() const;
+
+		/// @brief Sets the number of items in the list
+		/// @note This is not the number of children, it's the number of allocated
+		/// list items. The number of children can be less than this number.
+		/// @param[in] value The number of items in the list
+		void set_number_of_list_items(std::uint8_t value);
 
 		/// @brief Returns the value of the selected list index (only matters if no child number variable object is present)
 		/// @returns The value of the selected list index
@@ -1663,9 +1730,9 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 12; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t variableReference; ///< The object ID of a number variable to use for the value/selected index, or NULL_OBJECT_ID
-		std::uint8_t numberOfListItems; ///< Number of object references to follow. The size of the list can never exceed this number and this attribute cannot be changed.
-		std::uint8_t value; ///< Selected list index of this object. Used only if variable reference attribute is NULL
+		std::uint16_t variableReference = NULL_OBJECT_ID; ///< The object ID of a number variable to use for the value/selected index, or NULL_OBJECT_ID
+		std::uint8_t numberOfListItems = 0; ///< Number of object references to follow. The size of the list can never exceed this number and this attribute cannot be changed.
+		std::uint8_t value = 0; ///< Selected list index of this object. Used only if variable reference attribute is NULL
 	};
 
 	/// @brief This object outputs a line shape. The starting point for the line is found in the parent object
@@ -1693,7 +1760,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output line object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		OutputLine(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -1734,7 +1802,7 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 11; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint8_t lineDirection; ///< 0 = Line is drawn from top left to bottom right of enclosing virtual rectangle, 1 = Line is drawn from bottom left to top right
+		std::uint8_t lineDirection = 0; ///< 0 = Line is drawn from top left to bottom right of enclosing virtual rectangle, 1 = Line is drawn from bottom left to top right
 	};
 
 	/// @brief This object outputs a rectangle shape
@@ -1764,7 +1832,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output rectangle object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		OutputRectangle(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -1801,7 +1870,7 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 13; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint8_t lineSuppressionBitfield; ///< Bitfield of line suppression options
+		std::uint8_t lineSuppressionBitfield = 0; ///< Bitfield of line suppression options
 	};
 
 	/// @brief This object outputs an ellipse or circle shape
@@ -1834,7 +1903,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output ellipse object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		OutputEllipse(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -1892,9 +1962,9 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 15; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint8_t ellipseType; ///< The type of ellipse
-		std::uint8_t startAngle; ///< Start angle/2 (in degrees) from positive X axis counter clockwise (90° is straight up).
-		std::uint8_t endAngle; ///< End angle/2 (in degrees) from positive X axis counter clockwise (90° is straight up)
+		std::uint8_t ellipseType = 0; ///< The type of ellipse
+		std::uint8_t startAngle = 0; ///< Start angle/2 (in degrees) from positive X axis counter clockwise (90° is straight up).
+		std::uint8_t endAngle = 0; ///< End angle/2 (in degrees) from positive X axis counter clockwise (90° is straight up)
 	};
 
 	/// @brief This object outputs a polygon
@@ -1932,7 +2002,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output polygon object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		OutputPolygon(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -1982,7 +2053,7 @@ namespace isobus
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 14; ///< The fewest bytes of IOP data that can represent this object
 
 		std::vector<PolygonPoint> pointList; ///< List of points that make up the polygon. Must be at least 3 points!
-		std::uint8_t polygonType; ///< The polygon type. Affects how the object gets drawn.
+		std::uint8_t polygonType = 0; ///< The polygon type. Affects how the object gets drawn.
 	};
 
 	/// @brief This object is a meter. Meter is drawn about a circle enclosed within a defined square.
@@ -2020,7 +2091,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output meter object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		OutputMeter(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -2137,16 +2209,16 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 21; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t minValue; ///< Minimum value. Represents value when needle is at the start of arc
-		std::uint16_t maxValue; ///< Maximum value. Represents when the needle is at the end of the arc.
-		std::uint16_t value; ///< Current value. Needle position set to this value, used if variable ref is NULL.
-		std::uint8_t needleColour; ///< Needle (indicator) colour
-		std::uint8_t borderColour; ///< Border colour (if drawn)
-		std::uint8_t arcAndTickColour; ///< Meter arc and tick colour (if drawn)
-		std::uint8_t optionsBitfield; ///< Bitfield of options defined in `Options` enum
-		std::uint8_t numberOfTicks; ///< Number of ticks to draw about meter arc
-		std::uint8_t startAngle; ///< Start angle / 2 in degrees from positive X axis counterclockwise
-		std::uint8_t endAngle; ///< End angle / 2 in degrees from positve X axis counterclockwise
+		std::uint16_t minValue = 0; ///< Minimum value. Represents value when needle is at the start of arc
+		std::uint16_t maxValue = 0; ///< Maximum value. Represents when the needle is at the end of the arc.
+		std::uint16_t value = 0; ///< Current value. Needle position set to this value, used if variable ref is NULL.
+		std::uint8_t needleColour = 0; ///< Needle (indicator) colour
+		std::uint8_t borderColour = 0; ///< Border colour (if drawn)
+		std::uint8_t arcAndTickColour = 0; ///< Meter arc and tick colour (if drawn)
+		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
+		std::uint8_t numberOfTicks = 0; ///< Number of ticks to draw about meter arc
+		std::uint8_t startAngle = 0; ///< Start angle / 2 in degrees from positive X axis counterclockwise
+		std::uint8_t endAngle = 0; ///< End angle / 2 in degrees from positve X axis counterclockwise
 	};
 
 	/// @brief This is a linear bar graph or thermometer, defined by an enclosing rectangle.
@@ -2186,7 +2258,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output linear bar graph object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		OutputLinearBarGraph(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -2296,15 +2369,15 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 24; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t minValue; ///< Minimum value
-		std::uint16_t maxValue; ///< Maximum value
-		std::uint16_t targetValue; ///< Current target value. Used only if Target value variable Reference attribute is NULL.
-		std::uint16_t targetValueReference; ///< Object ID of a Number Variable object in which	to retrieve the bar graph’s target value.
-		std::uint16_t value; ///< Current value. Needle position set to this value, used if variable ref is NULL.
-		std::uint8_t numberOfTicks; ///< Number of ticks to draw along the bar graph
-		std::uint8_t colour; ///< Bar graph fill and border colour.
-		std::uint8_t targetLineColour; ///< Target line colour (if drawn).
-		std::uint8_t optionsBitfield; ///< Bitfield of options defined in `Options` enum
+		std::uint16_t minValue = 0; ///< Minimum value
+		std::uint16_t maxValue = 0; ///< Maximum value
+		std::uint16_t targetValue = 0; ///< Current target value. Used only if Target value variable Reference attribute is NULL.
+		std::uint16_t targetValueReference = NULL_OBJECT_ID; ///< Object ID of a Number Variable object in which	to retrieve the bar graph’s target value.
+		std::uint16_t value = 0; ///< Current value. Needle position set to this value, used if variable ref is NULL.
+		std::uint8_t numberOfTicks = 0; ///< Number of ticks to draw along the bar graph
+		std::uint8_t colour = 0; ///< Bar graph fill and border colour.
+		std::uint8_t targetLineColour = 0; ///< Target line colour (if drawn).
+		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
 	};
 
 	/// @brief TThis object is similar in concept to a linear bar graph but appears arched. Arched bar graphs are drawn about
@@ -2345,7 +2418,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for an output arched bar graph object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		OutputArchedBarGraph(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -2474,17 +2548,17 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 27; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t barGraphWidth; ///< Bar graph width in pixels. Bar graph width should be less than half the total width, or less than half the total height, whichever is least.
-		std::uint16_t minValue; ///< Minimum value. Represents value when needle is at the start of arc
-		std::uint16_t maxValue; ///< Maximum value. Represents when the needle is at the end of the arc.
-		std::uint16_t value; ///< Current value. Needle position set to this value, used if variable ref is NULL.
-		std::uint16_t targetValue; ///< Current target value. Used only if Target value variable Reference attribute is NULL.
-		std::uint16_t targetValueReference; ///< Object ID of a Number Variable object in which	to retrieve the bar graph’s target value.
-		std::uint8_t targetLineColour; ///< Target line colour (if drawn)
-		std::uint8_t colour; ///< Bar graph fill and border colour
-		std::uint8_t optionsBitfield; ///< Bitfield of options defined in `Options` enum
-		std::uint8_t startAngle; ///< Start angle / 2 in degrees from positive X axis counterclockwise
-		std::uint8_t endAngle; ///< End angle / 2 in degrees from positve X axis counterclockwise
+		std::uint16_t barGraphWidth = 0; ///< Bar graph width in pixels. Bar graph width should be less than half the total width, or less than half the total height, whichever is least.
+		std::uint16_t minValue = 0; ///< Minimum value. Represents value when needle is at the start of arc
+		std::uint16_t maxValue = 0; ///< Maximum value. Represents when the needle is at the end of the arc.
+		std::uint16_t value = 0; ///< Current value. Needle position set to this value, used if variable ref is NULL.
+		std::uint16_t targetValue = 0; ///< Current target value. Used only if Target value variable Reference attribute is NULL.
+		std::uint16_t targetValueReference = NULL_OBJECT_ID; ///< Object ID of a Number Variable object in which	to retrieve the bar graph’s target value.
+		std::uint8_t targetLineColour = 0; ///< Target line colour (if drawn)
+		std::uint8_t colour = 0; ///< Bar graph fill and border colour
+		std::uint8_t optionsBitfield = 0; ///< Bitfield of options defined in `Options` enum
+		std::uint8_t startAngle = 0; ///< Start angle / 2 in degrees from positive X axis counterclockwise
+		std::uint8_t endAngle = 0; ///< End angle / 2 in degrees from positve X axis counterclockwise
 	};
 
 	/// @brief This object displays a picture graphic (bitmap)
@@ -2523,7 +2597,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a picture graphic (bitmap) object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		PictureGraphic(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -2618,12 +2693,12 @@ namespace isobus
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 17; ///< The fewest bytes of IOP data that can represent this object
 
 		std::vector<std::uint8_t> rawData; ///< The raw picture data. Not a standard bitmap, but rather indicies into the VT colour table.
-		std::uint32_t numberOfBytesInRawData; ///< Number of bytes of raw data
-		std::uint16_t actualWidth; ///< The actual width of the bitmap
-		std::uint16_t actualHeight; ///< The actual height of the bitmap
-		std::uint8_t formatByte; ///< The format option byte
-		std::uint8_t optionsBitfield; ///< Options bitfield, see the `options` enum
-		std::uint8_t transparencyColour; ///< The colour to render as transparent if so set in the options
+		std::uint32_t numberOfBytesInRawData = 0; ///< Number of bytes of raw data
+		std::uint16_t actualWidth = 0; ///< The actual width of the bitmap
+		std::uint16_t actualHeight = 0; ///< The actual height of the bitmap
+		std::uint8_t formatByte = 0; ///< The format option byte
+		std::uint8_t optionsBitfield = 0; ///< Options bitfield, see the `options` enum
+		std::uint8_t transparencyColour = 0; ///< The colour to render as transparent if so set in the options
 	};
 
 	/// @brief A number variable holds a 32-bit unsigned integer value
@@ -2641,7 +2716,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a number variable object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		NumberVariable(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -2676,7 +2752,7 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 7; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint32_t value; ///< 32-bit unsigned integer value
+		std::uint32_t value = 0; ///< 32-bit unsigned integer value
 	};
 
 	/// @brief A String Variable holds a fixed length string.
@@ -2693,7 +2769,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a string variable object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		StringVariable(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -2798,7 +2875,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a font attributes object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		FontAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -2875,10 +2953,10 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 8; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint8_t colour; ///< Text clour
-		std::uint8_t size; ///< Font size
-		std::uint8_t type; ///< Encoding type
-		std::uint8_t style; ///< Font style
+		std::uint8_t colour = 0; ///< Text colour
+		std::uint8_t size = 0; ///< Font size
+		std::uint8_t type = 0; ///< Encoding type
+		std::uint8_t style = 0; ///< Font style
 	};
 
 	/// @brief Defines a line attributes object, which describes how lines should be displayed on the VT
@@ -2898,7 +2976,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a line attributes object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		LineAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -2933,7 +3012,7 @@ namespace isobus
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 8; ///< The fewest bytes of IOP data that can represent this object
 
-		std::uint16_t lineArtBitpattern; ///< Bit pattern art for line. Each bit represents a paintbrush spot
+		std::uint16_t lineArtBitpattern = 0; ///< Bit pattern art for line. Each bit represents a paintbrush spot
 	};
 
 	/// @brief This object holds attributes related to filling output shape objects
@@ -2962,7 +3041,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a fill attributes object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		FillAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -3023,8 +3103,17 @@ namespace isobus
 			NumberOfAttributes = 2
 		};
 
+		/// @brief Enumerates the different validation types for this object, which
+		/// describe how to interpret the validation string
+		enum class ValidationType : std::uint8_t
+		{
+			ValidCharactersAreListed = 0,
+			InvalidCharactersAreListed = 1
+		};
+
 		/// @brief Constructor for a input attributes object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		InputAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -3058,17 +3147,17 @@ namespace isobus
 
 		/// @brief Returns the validation type setting for this object
 		/// @returns The validation type associated to this object
-		std::uint8_t get_validation_type() const;
+		ValidationType get_validation_type() const;
 
 		/// @brief Sets the validation type setting for this object
-		/// @param[in] value The validation type
-		void set_validation_type(std::uint8_t value);
+		/// @param[in] newValidationType The validation type
+		void set_validation_type(ValidationType newValidationType);
 
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 7; ///< The fewest bytes of IOP data that can represent this object
 
 		std::string validationString; ///< String containing all valid or invalid character codes
-		std::uint8_t validationType; ///< 0 = valid characters are listed, 1 = invalid characters are listed
+		ValidationType validationType = ValidationType::ValidCharactersAreListed; ///< Describes how to interpret the validation string
 	};
 
 	/// @brief The Extended Input Attributes object, available in VT version 4 and later, defines the valid or invalid
@@ -3086,8 +3175,17 @@ namespace isobus
 			NumberOfAttributes = 2
 		};
 
+		/// @brief Enumerates the different validation types for this object, which
+		/// describe how to interpret the validation string
+		enum class ValidationType : std::uint8_t
+		{
+			ValidCharactersAreListed = 0,
+			InvalidCharactersAreListed = 1
+		};
+
 		/// @brief Constructor for an extended input attributes object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		ExtendedInputAttributes(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -3121,11 +3219,11 @@ namespace isobus
 
 		/// @brief Returns the validation type setting for this object
 		/// @returns The validation type associated to this object
-		std::uint8_t get_validation_type() const;
+		ValidationType get_validation_type() const;
 
 		/// @brief Sets the validation type setting for this object
 		/// @param[in] value The validation type
-		void set_validation_type(std::uint8_t value);
+		void set_validation_type(ValidationType value);
 
 		/// @todo Finish ExtendedInputAttributes implementation
 
@@ -3140,7 +3238,7 @@ namespace isobus
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 5; ///< The fewest bytes of IOP data that can represent this object
 
 		std::vector<CodePlane> codePlanes; ///< Code planes to which the character ranges belong.
-		std::uint8_t validationType; ///< 0 = valid characters are listed, 1 = invalid characters are listed
+		ValidationType validationType = ValidationType::ValidCharactersAreListed; ///< Describes how to interpret the validation string
 	};
 
 	/// @brief Points to another object
@@ -3158,7 +3256,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a object pointer object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		ObjectPointer(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -3204,7 +3303,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a object pointer object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		ExternalObjectPointer(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -3321,7 +3421,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a macro object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		Macro(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -3345,12 +3446,25 @@ namespace isobus
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
 		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
+		/// @brief Adds a macro command packet to this macro. Essentially these are CAN messages that represent normal
+		/// ECU to VT commands that will be executed in order by this macro.
+		/// @param[in] command The command packet (CAN message data) to add
+		/// @returns true if the command was added to the macro, otherwise false (maybe the max number of commands has been hit)
 		bool add_command_packet(std::array<std::uint8_t, CAN_DATA_LENGTH> command);
 
+		/// @brief Returns the number of stored command packets inside this macro (max 255)
+		/// @returns The number of stored command packets inside this macro
 		std::uint8_t get_number_of_commands() const;
 
+		/// @brief Returns a command packet by index
+		/// @param[in] index The index of the packet to retreive
+		/// @param[out] command The returned command packet if the return value is true, otherwise the returned
+		/// command packet content is undefined.
+		/// @returns true if a valid command packet was returned, otherwise false (index out of range)
 		bool get_command_packet(std::uint8_t index, std::array<std::uint8_t, CAN_DATA_LENGTH> &command);
 
+		/// @brief Deletes a command packet from the macro by index
+		/// @returns true if the specified command packet was removed, otherwise false (index out of range)
 		bool remove_command_packet(std::uint8_t index);
 
 	private:
@@ -3359,7 +3473,9 @@ namespace isobus
 		std::vector<std::array<std::uint8_t, CAN_DATA_LENGTH>> commandPackets; ///< Macro command list
 	};
 
-	/// @brief Defines a colour map object
+	/// @brief Defines a colour map object. The Colour Map object, optionally available in VT version 4 and 5, and mandatory in VT version 6 and
+	/// later, allows the Working Set designer to alter the transformation of the VT colour index values to the
+	/// defined RGB value. This provides a mechanism where the colours table can be changed at run-time.
 	class ColourMap : public VTObject
 	{
 	public:
@@ -3373,7 +3489,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a colour map object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		ColourMap(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
@@ -3397,8 +3514,30 @@ namespace isobus
 		/// @returns True if the attribute was changed, otherwise false (check the returnedError in this case to know why).
 		bool set_attribute(std::uint8_t attributeID, std::uint32_t rawAttributeData, AttributeError &returnedError) override;
 
+		/// @brief This is used to initialize the colour map data to either 2, 16, or 256 colour indexes.
+		/// Values will be initialized from the default color table to the colour map data whenever this is called.
+		/// @param[in] value The number of colour indexes to initialize the colour map to
+		/// @returns true if the number of colour indexes was set, otherwise false (invalid value or value is unchanged)
+		bool set_number_of_colour_indexes(std::uint16_t value);
+
+		/// @brief Returns the number of colour indexes in this colour map
+		/// @returns The number of colour indexes in this colour map (2, 16, or 256)
+		std::uint16_t get_number_of_colour_indexes() const;
+
+		/// @brief Sets the colour map index to the specified value/colour
+		/// @param[in] index The index to set
+		/// @param[in] value The colour to set the index to
+		/// @returns true if the colour map index was set, otherwise false (index out of range)
+		bool set_colour_map_index(std::uint8_t index, std::uint8_t value);
+
+		/// @brief Returns the colour index into the VT colour table at the specified index in this colour map
+		/// @param[in] index The index in this map to get the VT colour index for
+		/// @returns The VT colour index at the specified index in this colour map
+		std::uint8_t get_colour_map_index(std::uint8_t index) const;
+
 	private:
 		static constexpr std::uint32_t MIN_OBJECT_LENGTH = 5; ///< The fewest bytes of IOP data that can represent this object
+		std::vector<std::uint8_t> colourMapData; ///< The actual colour map data, which remaps each index from the default table based on the size of this vector.
 	};
 
 	/// @brief Defines a window mask object
@@ -3449,7 +3588,8 @@ namespace isobus
 		};
 
 		/// @brief Constructor for a window mask object
-		/// @param[in] parentObjectPool a Pointer to the rest of the object pool this object is a member of
+		/// @param[in] memberObjectPool a reference to the rest of the object pool this object is a member of
+		/// @param[in] currentColourTable a reference to the current colour table the working set is using
 		WindowMask(std::map<std::uint16_t, std::shared_ptr<VTObject>> &memberObjectPool, VTColourTable &currentColourTable);
 
 		/// @brief Returns the VT object type of the underlying derived object
