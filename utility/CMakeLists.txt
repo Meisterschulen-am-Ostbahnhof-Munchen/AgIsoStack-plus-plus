@@ -1,15 +1,15 @@
 cmake_minimum_required(VERSION 3.16)
 
 # Set source and include directories
-set(UTILITY_SRC_DIR "src")
-set(UTILITY_INCLUDE_DIR "include/isobus/utility")
+set(UTILITY_SRC_DIR "src/")
+set(UTILITY_INCLUDE_DIR "include/isobus/utility/")
 
 # Set source files
 set(UTILITY_SRC "system_timing.cpp" "processing_flags.cpp"
                 "iop_file_interface.cpp" "platform_endianness.cpp")
 
 # Prepend the source directory path to all the source files
-prepend(UTILITY_SRC ${UTILITY_SRC_DIR} ${UTILITY_SRC})
+list(TRANSFORM UTILITY_SRC PREPEND ${UTILITY_SRC_DIR})
 
 # Set the include files
 set(UTILITY_INCLUDE
@@ -17,7 +17,7 @@ set(UTILITY_INCLUDE
     "to_string.hpp" "platform_endianness.hpp" "event_dispatcher.hpp")
 
 # Prepend the include directory path to all the include files
-prepend(UTILITY_INCLUDE ${UTILITY_INCLUDE_DIR} ${UTILITY_INCLUDE})
+list(TRANSFORM UTILITY_INCLUDE PREPEND ${UTILITY_INCLUDE_DIR})
 
 # Create the library from the source and include files
 add_library(Utility ${UTILITY_SRC} ${UTILITY_INCLUDE})
