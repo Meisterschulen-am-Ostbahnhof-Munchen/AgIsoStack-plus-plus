@@ -4,8 +4,8 @@ cmake_minimum_required(VERSION 3.16)
 set(ISOBUS_PUBLIC_NAME "ISOBUS")
 
 # Set source and include directories
-set(ISOBUS_SRC_DIR "src")
-set(ISOBUS_INCLUDE_DIR "include/isobus/isobus")
+set(ISOBUS_SRC_DIR "src/")
+set(ISOBUS_INCLUDE_DIR "include/isobus/isobus/")
 
 # Set source files
 set(ISOBUS_SRC
@@ -42,7 +42,7 @@ set(ISOBUS_SRC
     "nmea2000_message_interface.cpp")
 
 # Prepend the source directory path to all the source files
-prepend(ISOBUS_SRC ${ISOBUS_SRC_DIR} ${ISOBUS_SRC})
+list(TRANSFORM ISOBUS_SRC PREPEND ${ISOBUS_SRC_DIR})
 
 # Set the include files
 set(ISOBUS_INCLUDE
@@ -82,7 +82,7 @@ set(ISOBUS_INCLUDE
     "nmea2000_message_definitions.hpp"
     "nmea2000_message_interface.hpp")
 # Prepend the include directory path to all the include files
-prepend(ISOBUS_INCLUDE ${ISOBUS_INCLUDE_DIR} ${ISOBUS_INCLUDE})
+list(TRANSFORM ISOBUS_INCLUDE PREPEND ${ISOBUS_INCLUDE_DIR})
 
 # Create the library from the source and include files
 add_library(Isobus ${ISOBUS_SRC} ${ISOBUS_INCLUDE})
