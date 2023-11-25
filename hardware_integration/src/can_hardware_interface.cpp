@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <limits>
 
+#include "esp_pthread.h"
+
 namespace isobus
 {
 	std::unique_ptr<std::thread> CANHardwareInterface::updateThread;
@@ -136,7 +138,14 @@ namespace isobus
 			return false;
 		}
 
+	    auto update_thread_function_cfg = esp_pthread_get_default_config();
+
+	    esp_pthread_set_cfg(&update_thread_function_cfg);
 		updateThread = std::make_unique<std::thread>(update_thread_function);
+
+
+		auto periodic_update_function_cfg = esp_pthread_get_default_config();
+	    esp_pthread_set_cfg(&periodic_update_function_cfg);
 		wakeupThread = std::make_unique<std::thread>(periodic_update_function);
 
 		threadsStarted = true;
@@ -149,6 +158,9 @@ namespace isobus
 
 				if (hardwareChannels[i]->frameHandler->get_is_valid())
 				{
+				    auto receive_can_frame_thread_function_cfg = esp_pthread_get_default_config();
+
+				    esp_pthread_set_cfg(&receive_can_frame_thread_function_cfg);
 					hardwareChannels[i]->receiveMessageThread = std::make_unique<std::thread>(receive_can_frame_thread_function, static_cast<std::uint8_t>(i));
 				}
 			}
