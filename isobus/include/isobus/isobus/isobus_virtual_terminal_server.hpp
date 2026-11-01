@@ -321,6 +321,14 @@ namespace isobus
 		/// @param[in] ws the working set which object pool processing is about to be started
 		virtual void transferred_object_pool_parse_start(std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &ws) const;
 
+		/// @brief Callback function which is called after one Object Pool Transfer message was added to a working set's IOP data
+		/// @details Useful to show the progress of an object pool upload, for example against the size from Get Memory.
+		/// It is called on the thread that processes received CAN messages.
+		/// @param[in] bytes The number of object pool bytes in the message, without the function code. A single frame transfer
+		/// can include its 0xFF padding.
+		/// @param[in] ws The working set that received the data
+		virtual void transferred_object_pool_component_received(std::uint32_t bytes, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &ws) const;
+
 		/// @brief This function is called from update() once a transferred or restored object pool has been parsed and answered
 		/// @details If no working set was active and this one is selectable, select_working_set() has already been called for it.
 		/// @param[in] workingSet The working set whose object pool was parsed

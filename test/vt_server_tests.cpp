@@ -185,6 +185,12 @@ public:
 		}
 	}
 
+	void transferred_object_pool_component_received(std::uint32_t bytes, std::shared_ptr<VirtualTerminalServerManagedWorkingSet> &workingSet) const override
+	{
+		receivedPoolComponentSizes.push_back(bytes);
+		receivedPoolComponentWorkingSets.push_back(workingSet);
+	}
+
 	void run_update()
 	{
 		update();
@@ -243,6 +249,8 @@ public:
 	std::function<void(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>)> onObjectPoolDeleted;
 	std::uint_fast8_t objectPoolDeletionRequests = 0;
 	std::vector<std::uint8_t> supportedObjects;
+	mutable std::vector<std::uint32_t> receivedPoolComponentSizes;
+	mutable std::vector<std::shared_ptr<VirtualTerminalServerManagedWorkingSet>> receivedPoolComponentWorkingSets;
 };
 
 class VirtualTerminalServerMessagingTest : public AgIsoStackTestFixture
@@ -2360,4 +2368,33 @@ TEST_F(VirtualTerminalServerMessagingTest, MacroBlanksAStringWithAnEmptyChangeSt
 
 	EXPECT_TRUE(server.execute_macro_for_test(5, workingSet));
 	EXPECT_EQ("  ", std::static_pointer_cast<StringVariable>(workingSet->get_object_by_id(0x1234))->get_value());
+}
+
+TEST_F(VirtualTerminalServerMessagingTest, EveryObjectPoolTransferIsReportedWithItsSize)
+{
+	VirtualCANPlugin testPlugin;
+	testPlugin.open();
+
+	CANHardwareInterface::set_number_of_can_channels(1);
+	CANHardwareInterface::assign_can_channel_frame_handler(0, std::make_shared<VirtualCANPlugin>());
+	CANHardwareInterface::start(false);
+
+	auto internalECU = test_helpers::claim_internal_control_function(0x4B, 0, time_source);
+	auto client = test_helpers::force_claim_partnered_control_function(0xA7, 0);
+
+	DerivedTestVTServer serverUnderTest(internalECU);
+	serverUnderTest.initialize();
+
+	receive_from_client(internalECU, client, { 0xFF, 0x01, 0x03, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF });
+	// Two Object Pool Transfer messages of 11 and 9 bytes, each including the function code. They are not parsed.
+	receive_tp_from_client(internalECU, client, { 0x11, 0x00, 0x00, 0x00, 0x00, 0x01, 0xE8, 0x03, 0x00, 0x00, 0x00 });
+	receive_tp_from_client(internalECU, client, { 0x11, 0xE8, 0x03, 0x01, 0x00, 0xFF, 0xFF, 0x00, 0x00 });
+	CANHardwareInterface::stop();
+
+	ASSERT_EQ(1U, serverUnderTest.managedWorkingSetList.size());
+	ASSERT_EQ(2U, serverUnderTest.receivedPoolComponentSizes.size());
+	EXPECT_EQ(10U, serverUnderTest.receivedPoolComponentSizes.at(0));
+	EXPECT_EQ(8U, serverUnderTest.receivedPoolComponentSizes.at(1));
+	EXPECT_EQ(serverUnderTest.managedWorkingSetList.front(), serverUnderTest.receivedPoolComponentWorkingSets.at(0));
+	EXPECT_EQ(serverUnderTest.managedWorkingSetList.front(), serverUnderTest.receivedPoolComponentWorkingSets.at(1));
 }

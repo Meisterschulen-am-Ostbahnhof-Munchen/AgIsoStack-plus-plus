@@ -243,6 +243,10 @@ namespace isobus
 		(void)ws;
 	}
 
+	void VirtualTerminalServer::transferred_object_pool_component_received(std::uint32_t, std::shared_ptr<isobus::VirtualTerminalServerManagedWorkingSet> &) const
+	{
+	}
+
 	void VirtualTerminalServer::object_pool_parse_finished(std::shared_ptr<VirtualTerminalServerManagedWorkingSet>, bool)
 	{
 	}
@@ -692,6 +696,7 @@ namespace isobus
 				tempPool.erase(tempPool.begin()); // Strip off the mux byte (double ouch, good thing this is rare)
 				LOG_INFO("[VT Server]: An ecu at address %u transferred %u bytes of object pool data to us.", message.get_identifier().get_source_address(), static_cast<std::uint32_t>(tempPool.size()));
 				managedWorkingSet->add_iop_raw_data(tempPool);
+				transferred_object_pool_component_received(static_cast<std::uint32_t>(tempPool.size()), managedWorkingSet);
 			}
 			break;
 
