@@ -10,9 +10,11 @@
 #define ISOBUS_VIRTUAL_TERMINAL_MANAGED_WORKING_SET_HPP
 
 #include <array>
+#include <atomic>
 #include <map>
 #include <mutex>
 #include <thread>
+#include <vector>
 
 #include "isobus/isobus/can_badge.hpp"
 #include "isobus/isobus/can_control_function.hpp"
@@ -51,9 +53,16 @@ namespace isobus
 		~VirtualTerminalServerManagedWorkingSet();
 
 		/// @brief Starts a thread to parse the received object pool files
+		/// @details The thread parses into an object tree of its own, which holds only the objects of the transfers it parses,
+		/// so neither the object tree nor the transfers that the server and the application use change while it runs.
 		void start_parsing_thread();
 
 		/// @brief Joins the parsing thread
+		/// @details If the pool was parsed successfully, its objects are added to the current object tree here,
+		/// replacing objects with the same ID, and its transfers are marked as parsed.
+		/// If parsing failed, the faulting object and its parent are set here, and the object tree stays as it was.
+		/// The transfers of the failed run stay unparsed. ISO 11783-6 describes that a VT deletes the whole pool after
+		/// a failed update, which is up to the server.
 		void join_parsing_thread();
 
 		/// @brief Returns if any object pools are being managed for this working set master
@@ -110,6 +119,21 @@ namespace isobus
 		/// @returns The object ID of the currently focused object
 		std::uint16_t get_object_focus() const;
 
+		/// @brief Sets the input object the operator is currently editing.
+		/// The application calls this when it opens or closes an input object for editing.
+		/// @param[in] objectID The object ID of the input object open for editing, or NULL_OBJECT_ID when none
+		void set_object_open_for_input(std::uint16_t objectID);
+
+		/// @brief Returns the input object the operator is currently editing
+		/// @returns The object ID of the input object open for editing, or NULL_OBJECT_ID when none
+		std::uint16_t get_object_open_for_input() const;
+
+		/// @brief Returns whether the last object pool parse replaced an object that already existed.
+		/// Only valid once object_pool_parse_finished() has been called for that parse.
+		/// @param[in] objectID The object ID to check
+		/// @returns true if the last parse replaced the object with this ID
+		bool was_object_replaced(std::uint16_t objectID) const;
+
 		/// @brief Sets the timestamp for when we received the last auxiliary input maintenance message
 		/// from the client.
 		/// @param[in] value New timestamp value in milliseconds
@@ -142,6 +166,8 @@ namespace isobus
 		bool is_object_pool_transfer_in_progress() const;
 
 	private:
+		class ObjectPoolParser; ///< Parses an object pool into an object tree of its own
+
 		/// @brief Sets the object pool processing state to a new value
 		/// @param[in] value The new state of processing the object pool
 		void set_object_pool_processing_state(ObjectPoolProcessingThreadState value);
@@ -149,13 +175,22 @@ namespace isobus
 		/// @brief The object pool processing thread will execute this function when it runs
 		void worker_thread_function();
 
+		/// @brief Adds the objects of a successful parse to the object tree, and marks its transfers as parsed
+		void take_over_parsed_objects();
+
+		/// @brief Sets the faulting object of a failed parse and looks up its parent
+		void set_fault_from_parser();
+
 		std::unique_ptr<std::thread> objectPoolProcessingThread = nullptr; ///< A thread to process the object pool with, since that can be fairly time consuming.
+		std::unique_ptr<ObjectPoolParser> objectPoolParser; ///< Holds the objects that the processing thread parses, until join_parsing_thread() adds them to the object tree
 		std::shared_ptr<ControlFunction> workingSetControlFunction = nullptr; ///< Stores the control function associated with this working set
 		std::vector<isobus::EventCallbackHandle> callbackHandles; ///< A convenient way to associate callback handles to a working set
 		ObjectPoolProcessingThreadState processingState = ObjectPoolProcessingThreadState::None; ///< Stores the state of processing the object pool
 		std::uint32_t workingSetMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track sending of the maintenance message
 		std::uint32_t auxiliaryInputMaintenanceMessageTimestamp_ms = 0; ///< A timestamp (in ms) to track if/when the working set sent an auxiliary input maintenance message
-		std::uint16_t focusedObject = NULL_OBJECT_ID; ///< Stores the object ID of the currently focused object
+		std::atomic<std::uint16_t> focusedObject = { NULL_OBJECT_ID }; ///< Stores the object ID of the currently focused object
+		std::atomic<std::uint16_t> openForInputObject = { NULL_OBJECT_ID }; ///< Stores the object ID of the input object currently open for editing
+		std::vector<std::uint16_t> replacedObjects; ///< Sorted IDs of the objects the last parse replaced, written by join_parsing_thread()
 		bool wasLoadedFromNonVolatileMemory = false; ///< Used to tell the server how this object pool was obtained
 		bool wasLoadedWithExtendedVersionLabel = false; ///< Used to tell the server which load version command restored this object pool
 		bool workingSetDeletionRequested = false; ///< Used to tell the server to delete this working set
